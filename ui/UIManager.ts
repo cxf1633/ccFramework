@@ -1,0 +1,812 @@
+import { BlockInputEvents, Canvas, director, instantiate, Label, Node, Prefab, tween, Tween, UIOpacity, UITransform, Vec3, Widget } from "cc";
+import { ResManager } from "../res/ResManager";
+import {
+    UI_LAYER_ORDER,
+    UILayer,
+    type UICloseOptions,
+    type UIConfig,
+    type UIOpenOptions,
+    type UIOpenParam,
+} from "./UIDefines";
+
+interface UIPathInfo {
+    bundleName: string;
+    prefabPath: string;
+    key: string;
+}
+
+interface UIState {
+    key: string;
+    config: Required<Pick<UIConfig, "prefab" | "layer" | "destroy" | "singleton" | "blockInput">> & UIConfig;
+    node: Node;
+    param: UIOpenParam;
+    valid: boolean;
+}
+
+interface DialogRequest {
+    pathInfo: UIPathInfo;
+    options: UIOpenOptions;
+    resolve: (node: Node | null) => void;
+}
+
+// 单个 UI 层的运行时容器，负责节点缓存、单例复用、关闭回调和点击阻塞层。
+class UILayerNode {
+    private readonly states: Map<string, UIState> = new Map();
+    private blocker: Node | null = null;
+
+    public constructor(
+        public readonly name: UILayer,
+        public readonly node: Node,
+    ) { }
+
+    public has(key: string): boolean {
+        return this.states.has(key);
+    }
+
+    public get(key: string): Node | null {
+        return this.states.get(key)?.node || null;
+    }
+
+    public add(state: UIState): Node {
+        if (state.config.singleton) {
+            const oldState = this.states.get(state.key);
+            if (oldState?.node?.isValid) {
+                oldState.node.active = true;
+                oldState.node.setSiblingIndex(this.node.children.length - 1);
+                return oldState.node;
+            }
+        }
+
+        state.node.active = true;
+        state.node.setPosition(Vec3.ZERO);
+        this.node.addChild(state.node);
+        this.states.set(state.key, state);
+        this.refreshBlocker();
+        return state.node;
+    }
+
+    public remove(target: string | Node, options: UICloseOptions = {}): boolean {
+        const state = typeof target === "string" ? this.states.get(target) : this.findStateByNode(target);
+        if (!state || !state.node?.isValid) return false;
+
+        const removeNext = () => {
+            this.states.delete(state.key);
+            state.valid = false;
+
+            const destroy = options.destroy ?? state.config.destroy;
+            if (destroy) {
+                state.node.destroy();
+            } else {
+                state.node.active = false;
+                state.node.removeFromParent();
+            }
+
+            this.callComponents(state.node, "onRemoved", state.param.data);
+            state.param.onRemoved?.(state.node, state.param.data);
+            this.refreshBlocker();
+        };
+
+        this.callComponents(state.node, "onBeforeRemove", state.param.data);
+        if (state.param.onBeforeRemove) {
+            state.param.onBeforeRemove(state.node, removeNext, state.param.data);
+        } else {
+            removeNext();
+        }
+
+        return true;
+    }
+
+    public clear(options: UICloseOptions = {}): void {
+        [...this.states.keys()].forEach((key) => this.remove(key, options));
+    }
+
+    public stateCount(): number {
+        return this.states.size;
+    }
+
+    private findStateByNode(node: Node): UIState | null {
+        for (const state of this.states.values()) {
+            if (state.node === node) return state;
+        }
+        return null;
+    }
+
+    // 只要本层存在需要阻塞输入的 UI，就创建一个全屏 BlockInputEvents 节点压在 UI 下方。
+    private refreshBlocker(): void {
+        const needsBlocker = [...this.states.values()].some((state) => state.config.blockInput);
+        if (!needsBlocker) {
+            this.blocker?.removeFromParent();
+            return;
+        }
+
+        if (!this.blocker || !this.blocker.isValid) {
+            this.blocker = new Node(`${this.name}Blocker`);
+            setupFullScreenNode(this.blocker, this.node);
+            this.blocker.addComponent(BlockInputEvents);
+        }
+
+        if (!this.blocker.parent) this.node.addChild(this.blocker);
+        this.blocker.setSiblingIndex(Math.max(0, this.node.children.length - 2));
+    }
+
+    private callComponents(node: Node, methodName: string, data: any): void {
+        for (const component of node.components) {
+            const method = (component as any)[methodName];
+            if (typeof method === "function") method.call(component, data);
+        }
+    }
+}
+
+// Dialog 层同一时间只展示一个窗口，后续请求排队等待当前窗口关闭。
+class UIDialogLayerNode extends UILayerNode {
+    private readonly queue: DialogRequest[] = [];
+    private currentKey: string | null = null;
+
+    public enqueue(request: DialogRequest, openNow: (request: DialogRequest) => Promise<Node | null>): void {
+        if (this.currentKey || this.stateCount() > 0) {
+            this.queue.push(request);
+            return;
+        }
+
+        this.openRequest(request, openNow);
+    }
+
+    public override add(state: UIState): Node {
+        this.currentKey = state.key;
+        return super.add(state);
+    }
+
+    public override remove(target: string | Node, options: UICloseOptions = {}): boolean {
+        const removed = super.remove(target, options);
+        if (removed) {
+            this.currentKey = null;
+            setTimeout(() => this.next(), 0);
+        }
+        return removed;
+    }
+
+    private next(): void {
+        const request = this.queue.shift();
+        if (!request) return;
+        this.openRequest(request, this.pendingOpen!);
+    }
+
+    private pendingOpen: ((request: DialogRequest) => Promise<Node | null>) | null = null;
+
+    private async openRequest(request: DialogRequest, openNow: (request: DialogRequest) => Promise<Node | null>): Promise<void> {
+        this.pendingOpen = openNow;
+        const node = await openNow(request);
+        request.resolve(node);
+    }
+}
+
+// UI 管理入口，负责 UI 配置注册、层级初始化、界面打开关闭，以及 Toast/Loading 等系统 UI。
+export class UIManager {
+    // 越靠后的层 siblingIndex 越高。
+    private readonly layerOrder = UI_LAYER_ORDER;
+
+    private readonly layers: Map<UILayer, UILayerNode> = new Map();
+    private readonly configMap: Map<string, UIConfig> = new Map();
+    private readonly nodeKeyMap: WeakMap<Node, string> = new WeakMap();
+    private toastTweenNode: Tween<Node> | null = null;
+    private toastTweenUIOpacity: Tween<UIOpacity> | null = null;
+    private toastTimer: ReturnType<typeof setTimeout> | null = null;
+    private loadingTimer: ReturnType<typeof setTimeout> | null = null;
+    private toastPrefab: Prefab | null = null;
+    private loadingPrefab: Prefab | null = null;
+    private toastCreatePromise: Promise<Node | null> | null = null;
+    private loadingCreatePromise: Promise<Node | null> | null = null;
+    private toastClearVersion = 0;
+    private loadingClearVersion = 0;
+
+    public constructor(private readonly res: ResManager) {
+    }
+
+    public configureSystemPrefabs(toastPrefab?: Prefab | null, loadingPrefab?: Prefab | null): void {
+        if (toastPrefab) this.toastPrefab = toastPrefab;
+        if (loadingPrefab) this.loadingPrefab = loadingPrefab;
+    }
+
+    public async open(path: string, options?: UIOpenOptions): Promise<Node | null>;
+    public async open(bundleName: string, prefabPath: string, options?: UIOpenOptions): Promise<Node | null>;
+    public async open(bundleNameOrPath: string, prefabPathOrOptions?: string | UIOpenOptions, options?: UIOpenOptions): Promise<Node | null> {
+        const pathInfo = this.parsePath(bundleNameOrPath, prefabPathOrOptions);
+        if (!pathInfo) {
+            console.warn(`[UIManager] Invalid ui path: ${bundleNameOrPath}`);
+            return null;
+        }
+
+        const openOptions = this.resolveOpenOptions(pathInfo, prefabPathOrOptions, options);
+        return this.openResolved(pathInfo, openOptions);
+    }
+
+    // 通过已注册的 UIID 打开界面。UIID 本身属于 app 层，UIManager 只接收字符串 key。
+    public async openById(uiid: string, options?: UIOpenOptions): Promise<Node | null> {
+        const config = this.getRegisteredConfig(uiid);
+        if (!config) return null;
+
+        const openOptions = { ...config, ...options };
+        const pathInfo = this.parseConfig(uiid, openOptions);
+        if (!pathInfo) return null;
+
+        return this.openResolved(pathInfo, openOptions);
+    }
+
+    public closeById(uiid: string, options: UICloseOptions = {}): boolean {
+        const pathInfo = this.parseConfig(uiid, this.getRegisteredConfig(uiid));
+        if (!pathInfo) return false;
+        return this.removeFromLayers(pathInfo.key, options);
+    }
+
+    public hasById(uiid: string): boolean {
+        return !!this.getById(uiid);
+    }
+
+    public getById(uiid: string): Node | null {
+        const pathInfo = this.parseConfig(uiid, this.getRegisteredConfig(uiid));
+        if (!pathInfo) return null;
+        return this.get(pathInfo.key);
+    }
+
+    public create(bundleName: string, prefabPath: string): Promise<Node | null> {
+        return this.createNode(bundleName, prefabPath);
+    }
+
+    // 初始化 UI 配置和层级，并返回指定 UI 层，通常由启动流程调用一次即可。
+    public init(configs?: Record<string, UIConfig>, layerName?: UILayer): Node | null {
+        this.initUIConfigs(configs);
+
+        const canvas = director.getScene()?.getComponentInChildren(Canvas);
+        if (!canvas) {
+            console.warn("[UIManager] Canvas not found.");
+            return null;
+        }
+
+        this.ensureAllLayers(canvas);
+        return this.layers.get(layerName || UILayer.UI)?.node || null;
+    }
+
+    public close(target: string | Node, options: UICloseOptions = {}): boolean {
+        if (target instanceof Node) {
+            const key = this.nodeKeyMap.get(target);
+            return this.removeFromLayers(key || target, options);
+        }
+
+        const pathInfo = this.parsePath(target);
+        return this.removeFromLayers(pathInfo?.key || target, options);
+    }
+
+    public closeAll(layerName?: UILayer, options: UICloseOptions = {}): void {
+        if (layerName) {
+            if (layerName === UILayer.Toast) this.closeToast();
+            if (layerName === UILayer.System) this.closeLoading();
+            this.getLayerNode(layerName)?.clear(options);
+            return;
+        }
+
+        this.clearSystemUIState();
+        this.layers.forEach((layer) => layer.clear(options));
+    }
+
+    public get(target: string): Node | null {
+        const key = this.parsePath(target)?.key || target;
+        for (const layer of this.layers.values()) {
+            const node = layer.get(key);
+            if (node) return node;
+        }
+        return null;
+    }
+
+    public has(target: string): boolean {
+        return !!this.get(target);
+    }
+
+    public closeToast(): void {
+        this.toastClearVersion++;
+        this.clearToastTimer();
+        this.stopToastTween();
+        this.destroyLayerChild(UILayer.Toast, "TipToast");
+    }
+
+    public waitOpen(): void {
+        void this.openLoading();
+    }
+
+    public waitClose(): void {
+        this.closeLoading();
+    }
+
+    public closeLoading(): void {
+        this.loadingClearVersion++;
+        this.clearLoadingTimer();
+        this.destroyLayerChild(UILayer.System, "loading");
+    }
+
+    public cancelLoadingAutoClose(): void {
+        this.clearLoadingTimer();
+    }
+
+    public getLayer(layerName: UILayer): Node | null {
+        return this.getLayerNode(layerName)?.node || null;
+    }
+
+    private openResolved(pathInfo: UIPathInfo, openOptions: UIOpenOptions): Promise<Node | null> {
+        const layerName = openOptions.layer || UILayer.PopUp;
+        const layer = this.getLayerNode(layerName);
+        if (!layer) return Promise.resolve(null);
+
+        // Dialog 层有排队语义，其他层直接打开。
+        if (layer instanceof UIDialogLayerNode) {
+            return new Promise<Node | null>((resolve) => {
+                layer.enqueue({ pathInfo, options: openOptions, resolve }, (request) => this.openNow(request.pathInfo, request.options));
+            });
+        }
+
+        return this.openNow(pathInfo, openOptions);
+    }
+
+    private async openNow(pathInfo: UIPathInfo, options: UIOpenOptions): Promise<Node | null> {
+        const layer = this.getLayerNode(options.layer || UILayer.PopUp);
+        if (!layer) return null;
+
+        if (options.singleton !== false && layer.has(pathInfo.key)) {
+            const oldNode = layer.get(pathInfo.key);
+            if (oldNode?.isValid) {
+                oldNode.active = true;
+                oldNode.setSiblingIndex(layer.node.children.length - 1);
+                options.onAdded?.(oldNode, options.data);
+                return oldNode;
+            }
+        }
+
+        const node = await this.createNode(pathInfo.bundleName, pathInfo.prefabPath);
+        if (!node || !node.isValid) {
+            console.warn(`[UIManager] Open ui failed: ${pathInfo.key}.`);
+            return null;
+        }
+
+        const config = this.initConfig(pathInfo, options);
+        const state: UIState = {
+            key: pathInfo.key,
+            config,
+            node,
+            param: options,
+            valid: true,
+        };
+
+        this.callComponents(node, "onAdded", options.data);
+        layer.add(state);
+        this.nodeKeyMap.set(node, pathInfo.key);
+        options.onAdded?.(node, options.data);
+        console.log(`[UIManager] Open ui success: ${pathInfo.key} -> ${config.layer}`);
+        return node;
+    }
+
+    private async createNode(bundleName: string, prefabPath: string): Promise<Node | null> {
+        try {
+            await this.res.ensureBundle(bundleName, { cacheable: true });
+        } catch (err) {
+            console.warn(`[UIManager] Load ui bundle failed: ${bundleName}/${prefabPath}`, err);
+            return null;
+        }
+
+        const result = await this.res.loadPrefabFromBundle(bundleName, prefabPath);
+        if (!result.success || !result.prefab) {
+            console.warn(`[UIManager] Create ui failed: ${bundleName}/${prefabPath}`, result.error);
+            return null;
+        }
+
+        return instantiate(result.prefab);
+    }
+
+    public async showToast(text: string, duration: number = 3, animated: boolean = true): Promise<void> {
+        const layer = this.getLayerNode(UILayer.Toast);
+        if (!layer) return;
+
+        let tipToast = this.getValidLayerChild(layer.node, "TipToast");
+        if (!tipToast) {
+            const clearVersion = this.toastClearVersion;
+            tipToast = await this.getOrCreateToastNode();
+            if (clearVersion !== this.toastClearVersion) {
+                if (tipToast && !tipToast.parent) tipToast.destroy();
+                return;
+            }
+
+            const existingToast = this.getValidLayerChild(layer.node, "TipToast");
+            if (existingToast && existingToast !== tipToast) {
+                if (tipToast && !tipToast.parent) tipToast.destroy();
+                tipToast = existingToast;
+            } else if (tipToast && !tipToast.parent) {
+                tipToast.setPosition(Vec3.ZERO);
+                layer.node.addChild(tipToast);
+                tipToast.active = true;
+            }
+        }
+
+        if (!tipToast || !tipToast.isValid) return;
+
+        this.stopToastTween();
+        this.clearToastTimer();
+        this.setToastText(tipToast, text);
+        tipToast.setSiblingIndex(layer.node.children.length - 1);
+
+        if (animated) {
+            this.playToastAnim(tipToast);
+            return;
+        }
+
+        tipToast.setScale(1, 1, 1);
+        const uiOpacity = tipToast.getComponent(UIOpacity);
+        if (uiOpacity) uiOpacity.opacity = 255;
+        this.toastTimer = setTimeout(() => this.closeToastNode(tipToast), Math.max(0, duration) * 1000);
+    }
+
+    private playToastAnim(tipToast: Node): void {
+        tipToast.setScale(new Vec3(0.8, 0.8, 1));
+        const uiOpacity = tipToast.getComponent(UIOpacity);
+        if (uiOpacity) uiOpacity.opacity = 0;
+
+        this.toastTweenNode = tween(tipToast)
+            .to(0.2, { scale: new Vec3(1, 1, 1) })
+            .start();
+
+        if (!uiOpacity) {
+            this.toastTimer = setTimeout(() => this.closeToastNode(tipToast), 3000);
+            return;
+        }
+
+        this.toastTweenUIOpacity = tween(uiOpacity)
+            .to(0.2, { opacity: 255 })
+            .delay(2.6)
+            .to(0.2, { opacity: 0 })
+            .call(() => this.closeToastNode(tipToast))
+            .start();
+    }
+
+    private async openLoading(): Promise<void> {
+        const layer = this.getLayerNode(UILayer.System);
+        if (!layer) return;
+
+        let tipLoading = this.getValidLayerChild(layer.node, "loading");
+        if (tipLoading) {
+            tipLoading.setSiblingIndex(layer.node.children.length - 1);
+            return;
+        }
+
+        const clearVersion = this.loadingClearVersion;
+        tipLoading = await this.getOrCreateLoadingNode();
+        if (clearVersion !== this.loadingClearVersion) {
+            if (tipLoading && !tipLoading.parent) tipLoading.destroy();
+            return;
+        }
+
+        const existingLoading = this.getValidLayerChild(layer.node, "loading");
+        if (existingLoading && existingLoading !== tipLoading) {
+            if (tipLoading && !tipLoading.parent) tipLoading.destroy();
+            tipLoading = existingLoading;
+        } else if (tipLoading && !tipLoading.parent) {
+            tipLoading.setPosition(Vec3.ZERO);
+            layer.node.addChild(tipLoading);
+            tipLoading.active = true;
+        }
+
+        if (!tipLoading || !tipLoading.isValid) return;
+
+        tipLoading.setSiblingIndex(layer.node.children.length - 1);
+
+        this.clearLoadingTimer();
+        this.loadingTimer = setTimeout(() => this.closeLoadingNode(tipLoading), 10000);
+    }
+
+    private async createResourcesPrefabNode(prefabPath: string): Promise<Node | null> {
+        try {
+            const result = await this.res.loadPrefabFromBundle("resources", prefabPath);
+            if (!result.success || !result.prefab) {
+                console.warn(`[UIManager] Create resources prefab failed: resources/${prefabPath}. Bundle must be loaded by app startup before use.`, result.error);
+                return null;
+            }
+
+            return instantiate(result.prefab);
+        } catch (err) {
+            console.warn(`[UIManager] Create resources prefab failed: resources/${prefabPath}`, err);
+            return null;
+        }
+    }
+
+    private getOrCreateToastNode(): Promise<Node | null> {
+        if (!this.toastCreatePromise) {
+            const createPromise = this.createSystemNode(this.toastPrefab, "prefab/TipToast");
+            createPromise.then(
+                () => this.clearToastCreatePromise(createPromise),
+                () => this.clearToastCreatePromise(createPromise),
+            );
+            this.toastCreatePromise = createPromise;
+        }
+
+        return this.toastCreatePromise;
+    }
+
+    private getOrCreateLoadingNode(): Promise<Node | null> {
+        if (!this.loadingCreatePromise) {
+            const createPromise = this.createSystemNode(this.loadingPrefab, "prefab/loading");
+            createPromise.then(
+                () => this.clearLoadingCreatePromise(createPromise),
+                () => this.clearLoadingCreatePromise(createPromise),
+            );
+            this.loadingCreatePromise = createPromise;
+        }
+
+        return this.loadingCreatePromise;
+    }
+
+    private clearToastCreatePromise(createPromise: Promise<Node | null>): void {
+        if (this.toastCreatePromise === createPromise) {
+            this.toastCreatePromise = null;
+        }
+    }
+
+    private clearLoadingCreatePromise(createPromise: Promise<Node | null>): void {
+        if (this.loadingCreatePromise === createPromise) {
+            this.loadingCreatePromise = null;
+        }
+    }
+
+    private async createSystemNode(prefab: Prefab | null, fallbackPath: string): Promise<Node | null> {
+        if (prefab?.isValid) {
+            return instantiate(prefab);
+        }
+
+        return await this.createResourcesPrefabNode(fallbackPath);
+    }
+
+    private setToastText(tipToast: Node, text: string): void {
+        const nestedLabel = tipToast.getChildByName("bg")?.getChildByName("tipLabel")?.getComponent(Label);
+        if (nestedLabel) nestedLabel.string = text;
+
+        const directLabel = tipToast.getChildByName("tipLabel")?.getComponent(Label);
+        if (directLabel) directLabel.string = text;
+    }
+
+    private destroyLayerChild(layerName: UILayer, childName: string): void {
+        const layer = this.getLayerNode(layerName);
+        const children = layer?.node.children.filter((child) => child.name === childName) || [];
+        children.forEach((child) => {
+            if (child?.isValid) child.destroy();
+        });
+    }
+
+    private getValidLayerChild(parent: Node | null | undefined, childName: string): Node | null {
+        if (!parent?.isValid) return null;
+        return parent.children.find((child) => child.name === childName && child.isValid) || null;
+    }
+
+    private closeToastNode(target: Node): void {
+        this.clearToastTimer();
+        this.stopToastTween();
+        if (target?.isValid) target.destroy();
+    }
+
+    private closeLoadingNode(target: Node): void {
+        this.clearLoadingTimer();
+        if (target?.isValid) target.destroy();
+    }
+
+    private clearSystemUIState(): void {
+        this.toastClearVersion++;
+        this.loadingClearVersion++;
+        this.clearToastTimer();
+        this.stopToastTween();
+        this.clearLoadingTimer();
+        this.toastCreatePromise = null;
+        this.loadingCreatePromise = null;
+        this.destroyLayerChild(UILayer.Toast, "TipToast");
+        this.destroyLayerChild(UILayer.System, "loading");
+    }
+
+    private stopToastTween(): void {
+        this.toastTweenNode?.stop();
+        this.toastTweenNode = null;
+        this.toastTweenUIOpacity?.stop();
+        this.toastTweenUIOpacity = null;
+    }
+
+    private clearToastTimer(): void {
+        if (!this.toastTimer) return;
+        clearTimeout(this.toastTimer);
+        this.toastTimer = null;
+    }
+
+    private clearLoadingTimer(): void {
+        if (!this.loadingTimer) return;
+        clearTimeout(this.loadingTimer);
+        this.loadingTimer = null;
+    }
+
+    private removeFromLayers(target: string | Node, options: UICloseOptions): boolean {
+        for (const layer of this.layers.values()) {
+            if (layer.remove(target, options)) return true;
+        }
+        return false;
+    }
+
+    private initUIConfigs(configs?: Record<string, UIConfig>): void {
+        if (!configs) return;
+
+        for (const key in configs) {
+            this.configMap.set(key, configs[key]);
+        }
+    }
+
+    private parsePath(bundleNameOrPath: string, prefabPathOrOptions?: string | UIOpenOptions): UIPathInfo | null {
+        if (typeof prefabPathOrOptions === "string") {
+            return {
+                bundleName: bundleNameOrPath,
+                prefabPath: prefabPathOrOptions,
+                key: `${bundleNameOrPath}/${prefabPathOrOptions}`,
+            };
+        }
+
+        const path = bundleNameOrPath.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+        const segments = path.split("/");
+        if (segments.length < 2) return null;
+
+        const bundleName = segments.shift()!;
+        const prefabPath = segments.join("/");
+        return {
+            bundleName,
+            prefabPath,
+            key: `${bundleName}/${prefabPath}`,
+        };
+    }
+
+    private parseConfig(uiid: string, config: UIConfig | null): UIPathInfo | null {
+        if (!config) return null;
+        if (!config.bundle || !config.prefab) {
+            console.warn(`[UIManager] Invalid UI config: ${uiid}`);
+            return null;
+        }
+
+        return {
+            bundleName: config.bundle,
+            prefabPath: config.prefab,
+            key: `${config.bundle}/${config.prefab}`,
+        };
+    }
+
+    private resolveOpenOptions(pathInfo: UIPathInfo, prefabPathOrOptions?: string | UIOpenOptions, options?: UIOpenOptions): UIOpenOptions {
+        const inlineOptions = typeof prefabPathOrOptions === "object" ? prefabPathOrOptions : options;
+        const registered = this.configMap.get(pathInfo.key) || this.configMap.get(pathInfo.prefabPath);
+        return {
+            ...registered,
+            ...inlineOptions,
+            bundle: inlineOptions?.bundle || registered?.bundle || pathInfo.bundleName,
+            prefab: inlineOptions?.prefab || registered?.prefab || pathInfo.prefabPath,
+        };
+    }
+
+    // 补齐一次打开请求的默认配置。
+    private initConfig(pathInfo: UIPathInfo, options: UIOpenOptions): UIState["config"] {
+        return {
+            ...options,
+            bundle: options.bundle || pathInfo.bundleName,
+            prefab: options.prefab || pathInfo.prefabPath,
+            layer: options.layer || UILayer.PopUp,
+            destroy: options.destroy ?? true,
+            singleton: options.singleton ?? true,
+            blockInput: options.blockInput ?? true,
+        };
+    }
+
+    private getRegisteredConfig(uiid: string): UIConfig | null {
+        const config = this.configMap.get(uiid);
+        if (!config) {
+            console.warn(`[UIManager] Missing UI config: ${uiid}`);
+            return null;
+        }
+        return config;
+    }
+
+    private getLayerNode(layerName: UILayer): UILayerNode | null {
+        const canvas = director.getScene()?.getComponentInChildren(Canvas);
+        if (!canvas) {
+            console.warn("[UIManager] Canvas not found.");
+            return null;
+        }
+
+        this.ensureAllLayers(canvas);
+        const layer = this.layers.get(layerName);
+        if (!layer?.node?.isValid) {
+            this.layers.delete(layerName);
+            return null;
+        }
+
+        return layer;
+    }
+
+    private ensureAllLayers(canvas: Canvas): void {
+        const guiRoot = this.ensureUIHierarchy(canvas);
+        this.layerOrder.forEach((layerName, index) => {
+            const node = this.getOrCreateChild(guiRoot, layerName);
+            setupFullScreenNode(node, guiRoot);
+            node.setSiblingIndex(index + 1);
+
+            const cachedLayer = this.layers.get(layerName);
+            if (!cachedLayer || !cachedLayer.node?.isValid || cachedLayer.node !== node) {
+                const layer = layerName === UILayer.Dialog ? new UIDialogLayerNode(layerName, node) : new UILayerNode(layerName, node);
+                this.layers.set(layerName, layer);
+            }
+        });
+    }
+
+    private ensureUIHierarchy(canvas: Canvas): Node {
+        // 兼容旧项目里 Canvas 节点本身就是 gui 的结构。
+        if (canvas.node.name === "gui" && canvas.node.parent?.getChildByName("game")) {
+            const uiCamera = this.getOrCreateChild(canvas.node, "UICamera");
+            uiCamera.setSiblingIndex(0);
+            return canvas.node;
+        }
+
+        const uiRoot = this.getOrCreateChild(canvas.node, "UIRoot");
+        setupFullScreenNode(uiRoot, canvas.node);
+
+        const root = this.getOrCreateChild(uiRoot, "root");
+        setupFullScreenNode(root, uiRoot);
+
+        const game = this.getOrCreateChild(root, "game");
+        setupFullScreenNode(game, root);
+        game.setSiblingIndex(0);
+
+        const gui = this.getOrCreateChild(root, "gui");
+        setupFullScreenNode(gui, root);
+        gui.setSiblingIndex(1);
+
+        const uiCamera = this.getOrCreateChild(gui, "UICamera");
+        setupFullScreenNode(uiCamera, gui);
+        uiCamera.setSiblingIndex(0);
+
+        return gui;
+    }
+
+    private getOrCreateChild(parent: Node, name: string): Node {
+        let child = parent.getChildByName(name);
+        if (!child) {
+            child = new Node(name);
+            parent.addChild(child);
+        }
+        return child;
+    }
+
+    private callComponents(node: Node, methodName: string, data: any): void {
+        for (const component of node.components) {
+            const method = (component as any)[methodName];
+            if (typeof method === "function") method.call(component, data);
+        }
+    }
+}
+
+// 设置节点为跟随父节点尺寸的全屏 UI 节点。
+function setupFullScreenNode(node: Node, parent: Node): void {
+    node.layer = parent.layer;
+    node.setPosition(Vec3.ZERO);
+
+    const parentTransform = parent.getComponent(UITransform);
+    let transform = node.getComponent(UITransform);
+    if (!transform) transform = node.addComponent(UITransform);
+    if (parentTransform) {
+        transform.setContentSize(parentTransform.contentSize);
+        transform.setAnchorPoint(parentTransform.anchorPoint);
+    }
+
+    let widget = node.getComponent(Widget);
+    if (!widget) widget = node.addComponent(Widget);
+    widget.isAlignLeft = true;
+    widget.isAlignRight = true;
+    widget.isAlignTop = true;
+    widget.isAlignBottom = true;
+    widget.left = 0;
+    widget.right = 0;
+    widget.top = 0;
+    widget.bottom = 0;
+    widget.alignMode = Widget.AlignMode.ALWAYS;
+    widget.updateAlignment();
+}
