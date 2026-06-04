@@ -18,15 +18,40 @@ export interface UIButtonBindingConfig {
 @ccclass("UIBase")
 export class UIBase extends Component {
     public nodes: Map<string, Node> = null!;
-
     private readonly buttonBindings: ButtonBinding[] = [];
 
-    protected __preload(): void {
+    protected onLoad(): void {
         this.nodeTreeInfoLite();
         this.bindButtonsByNodeName();
+        this.onInit();
     }
 
-    protected onLoad(): void {
+    protected onDestroy(): void {
+        this.onDisable();
+        this.clearButtonBindings();
+        if (this.nodes) {
+            this.nodes.clear();
+            this.nodes = null!;
+        }
+    }
+
+    protected onEnable(): void {
+        this.onShow();
+    }
+    protected onDisable(): void {
+        this.onHide();
+    }
+    protected onInit() {
+        // 子类自己的初始化逻辑
+    }
+    protected onDispose() {
+        // 子类自己的销毁逻辑
+    }
+    protected onShow() {
+
+    }
+    protected onHide() {
+
     }
 
     public getNode(name: string): Node | null {
@@ -129,13 +154,7 @@ export class UIBase extends Component {
         this.buttonBindings.length = 0;
     }
 
-    protected onDestroy(): void {
-        this.clearButtonBindings();
-        if (this.nodes) {
-            this.nodes.clear();
-            this.nodes = null!;
-        }
-    }
+
 
     private resolveNode(target: string | Node): Node | null {
         if (typeof target !== "string") return target;
