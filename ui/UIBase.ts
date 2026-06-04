@@ -26,6 +26,9 @@ export class UIBase extends Component {
         this.bindButtonsByNodeName();
     }
 
+    protected onLoad(): void {
+    }
+
     public getNode(name: string): Node | null {
         if (this.nodes) {
             const node = this.nodes.get(name);
