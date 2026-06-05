@@ -20,9 +20,13 @@ export class UIBase extends Component {
     public nodes: Map<string, Node> = null!;
     private readonly buttonBindings: ButtonBinding[] = [];
 
-    protected onLoad(): void {
+
+    protected __preload(): void {
         this.nodeTreeInfoLite();
         this.bindButtonsByNodeName();
+
+    }
+    protected onLoad(): void {
         this.onInit();
     }
 
@@ -41,16 +45,16 @@ export class UIBase extends Component {
     protected onDisable(): void {
         this.onHide();
     }
-    protected onInit() {
+    protected onInit(): void {
         // 子类自己的初始化逻辑
     }
-    protected onDispose() {
+    protected onDispose(): void {
         // 子类自己的销毁逻辑
     }
-    protected onShow() {
+    protected onShow(): void {
 
     }
-    protected onHide() {
+    protected onHide(): void {
 
     }
 
