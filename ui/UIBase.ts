@@ -1,4 +1,4 @@
-import { _decorator, Button, Component, Node } from "cc";
+import { _decorator, Button, Component, EventKeyboard, Input, input, Node } from "cc";
 
 const { ccclass } = _decorator;
 
@@ -32,6 +32,7 @@ export class UIBase extends Component {
 
     protected onDestroy(): void {
         this.onDisable();
+        this.onDispose();
         this.clearButtonBindings();
         if (this.nodes) {
             this.nodes.clear();
@@ -57,6 +58,32 @@ export class UIBase extends Component {
     protected onHide(): void {
 
     }
+
+    /**
+     * 键盘事件开关
+     * @param on 打开键盘事件为true
+     */
+    setKeyboard(on: boolean) {
+        if (on) {
+            input.on(Input.EventType.KEY_DOWN, this.onKeyDown, this);
+            input.on(Input.EventType.KEY_UP, this.onKeyUp, this);
+            input.on(Input.EventType.KEY_PRESSING, this.onKeyPressing, this);
+        }
+        else {
+            input.off(Input.EventType.KEY_DOWN, this.onKeyDown, this);
+            input.off(Input.EventType.KEY_UP, this.onKeyUp, this);
+            input.off(Input.EventType.KEY_PRESSING, this.onKeyPressing, this);
+        }
+    }
+
+    /** 键按下 */
+    protected onKeyDown(event: EventKeyboard) { }
+
+    /** 键放开 */
+    protected onKeyUp(event: EventKeyboard) { }
+
+    /** 键长按 */
+    protected onKeyPressing(event: EventKeyboard) { }
 
     public getNode(name: string): Node | null {
         if (this.nodes) {
