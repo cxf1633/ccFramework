@@ -1,0 +1,15 @@
+{
+    "NET_ERROR_1": "Network error",
+    "NET_ERROR_2": "Network connection error, please check your network",
+    "NET_ERROR_3": "Disconnected",
+    "NET_ERROR_4": "You have been disconnected from the server due to timeout",
+    "NET_ERROR_5": "Reconnect",
+    "NET_ERROR_6": "Connection lost (Error code: %{code})",
+    "NET_ERROR_7": "Reconnection successful",
+    "NET_ERROR_8": "Reconnection failed",
+    "SYSTEM_1": "confirm",
+    "SYSTEM_2": "cancel",
+    "SYSTEM_3": "We have detected that you are still in the room",
+    "SYSTEM_4": "TIME OUT",
+    "SYSTEM_5": "Two consecutive timeouts, Let’s take a break."
+}
