@@ -20,6 +20,7 @@ export interface UIButtonBindingConfig {
 export class UIBase extends Component {
     public nodes: Map<string, Node> = null!;
     private readonly buttonBindings: ButtonBinding[] = [];
+    private showParams: any = null;
 
 
     protected __preload(): void {
@@ -42,7 +43,7 @@ export class UIBase extends Component {
     }
 
     protected onEnable(): void {
-        this.onShow();
+        this.onShow(this.showParams);
     }
     protected onDisable(): void {
         this.onHide();
@@ -53,7 +54,13 @@ export class UIBase extends Component {
     protected onDispose(): void {
         // 子类自己的销毁逻辑
     }
-    protected onShow(): void {
+    protected onBeforeRemove(params?: any): void {
+
+    }
+    protected onRemoved(params?: any): void {
+
+    }
+    protected onShow(params?: any): void {
 
     }
     protected onHide(): void {
@@ -85,6 +92,10 @@ export class UIBase extends Component {
 
     /** 键长按 */
     protected onKeyPressing(event: EventKeyboard) { }
+
+    public setShowParams(params?: any): void {
+        this.showParams = params;
+    }
 
     public getNode(name: string): Node | null {
         if (this.nodes) {

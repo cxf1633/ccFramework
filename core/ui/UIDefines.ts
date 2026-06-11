@@ -25,15 +25,12 @@ export interface UIConfig {
     prefab?: string;
     layer?: UILayer;
     destroy?: boolean;
-    singleton?: boolean;
-    blockInput?: boolean;
 }
 
 export interface UIOpenParam {
-    data?: any;
-    onAdded?: (node: Node, data?: any) => void;
-    onBeforeRemove?: (node: Node, next: () => void, data?: any) => void;
-    onRemoved?: (node: Node, data?: any) => void;
+    params?: any;
+    onBeforeRemove?: (node: Node, next: () => void, params?: any) => void;
+    onRemoved?: (node: Node, params?: any) => void;
 }
 
 export interface UIOpenOptions extends UIConfig, UIOpenParam {

@@ -1,4 +1,4 @@
-import { BlockInputEvents, Canvas, director, instantiate, Label, Node, Prefab, tween, Tween, UIOpacity, UITransform, Vec3, Widget } from "cc";
+import { Canvas, director, instantiate, Label, Node, Prefab, tween, Tween, UIOpacity, UITransform, Vec3, Widget } from "cc";
 import { ResManager } from "../res/ResManager";
 import {
     UI_LAYER_ORDER,
@@ -17,7 +17,7 @@ interface UIPathInfo {
 
 interface UIState {
     key: string;
-    config: Required<Pick<UIConfig, "prefab" | "layer" | "destroy" | "singleton" | "blockInput">> & UIConfig;
+    config: Required<Pick<UIConfig, "prefab" | "layer" | "destroy">> & UIConfig;
     node: Node;
     param: UIOpenParam;
     valid: boolean;
@@ -29,10 +29,9 @@ interface DialogRequest {
     resolve: (node: Node | null) => void;
 }
 
-// 单个 UI 层的运行时容器，负责节点缓存、单例复用、关闭回调和点击阻塞层。
+// 单个 UI 层的运行时容器，负责节点缓存和关闭回调。
 class UILayerNode {
     private readonly states: Map<string, UIState> = new Map();
-    private blocker: Node | null = null;
 
     public constructor(
         public readonly name: UILayer,
@@ -48,20 +47,16 @@ class UILayerNode {
     }
 
     public add(state: UIState): Node {
-        if (state.config.singleton) {
-            const oldState = this.states.get(state.key);
-            if (oldState?.node?.isValid) {
-                oldState.node.active = true;
-                oldState.node.setSiblingIndex(this.node.children.length - 1);
-                return oldState.node;
-            }
+        const oldState = this.states.get(state.key);
+        if (oldState?.node?.isValid) {
+            return this.showState(oldState);
         }
 
+        this.callComponents(state.node, "setShowParams", state.param.params);
         state.node.active = true;
         state.node.setPosition(Vec3.ZERO);
         this.node.addChild(state.node);
         this.states.set(state.key, state);
-        this.refreshBlocker();
         return state.node;
     }
 
@@ -70,25 +65,22 @@ class UILayerNode {
         if (!state || !state.node?.isValid) return false;
 
         const removeNext = () => {
-            this.states.delete(state.key);
-            state.valid = false;
-
             const destroy = options.destroy ?? state.config.destroy;
             if (destroy) {
+                this.states.delete(state.key);
+                state.valid = false;
                 state.node.destroy();
             } else {
                 state.node.active = false;
-                state.node.removeFromParent();
             }
 
-            this.callComponents(state.node, "onRemoved", state.param.data);
-            state.param.onRemoved?.(state.node, state.param.data);
-            this.refreshBlocker();
+            this.callComponents(state.node, "onRemoved", state.param.params);
+            state.param.onRemoved?.(state.node, state.param.params);
         };
 
-        this.callComponents(state.node, "onBeforeRemove", state.param.data);
+        this.callComponents(state.node, "onBeforeRemove", state.param.params);
         if (state.param.onBeforeRemove) {
-            state.param.onBeforeRemove(state.node, removeNext, state.param.data);
+            state.param.onBeforeRemove(state.node, removeNext, state.param.params);
         } else {
             removeNext();
         }
@@ -101,7 +93,14 @@ class UILayerNode {
     }
 
     public stateCount(): number {
-        return this.states.size;
+        return [...this.states.values()].filter((state) => state.node?.isValid && state.node.active).length;
+    }
+
+    public show(key: string, param?: UIOpenParam): Node | null {
+        const state = this.states.get(key);
+        if (!state?.node?.isValid) return null;
+        if (param) state.param = param;
+        return this.showState(state);
     }
 
     private findStateByNode(node: Node): UIState | null {
@@ -111,22 +110,16 @@ class UILayerNode {
         return null;
     }
 
-    // 只要本层存在需要阻塞输入的 UI，就创建一个全屏 BlockInputEvents 节点压在 UI 下方。
-    private refreshBlocker(): void {
-        const needsBlocker = [...this.states.values()].some((state) => state.config.blockInput);
-        if (!needsBlocker) {
-            this.blocker?.removeFromParent();
-            return;
+    private showState(state: UIState): Node {
+        const wasActive = state.node.activeInHierarchy;
+        this.callComponents(state.node, "setShowParams", state.param.params);
+        state.node.active = true;
+        state.node.setSiblingIndex(this.node.children.length - 1);
+        state.valid = true;
+        if (wasActive) {
+            this.callComponents(state.node, "onShow", state.param.params);
         }
-
-        if (!this.blocker || !this.blocker.isValid) {
-            this.blocker = new Node(`${this.name}Blocker`);
-            setupFullScreenNode(this.blocker, this.node);
-            this.blocker.addComponent(BlockInputEvents);
-        }
-
-        if (!this.blocker.parent) this.node.addChild(this.blocker);
-        this.blocker.setSiblingIndex(Math.max(0, this.node.children.length - 2));
+        return state.node;
     }
 
     private callComponents(node: Node, methodName: string, data: any): void {
@@ -221,11 +214,11 @@ export class UIManager {
     }
 
     // 通过已注册的 UIID 打开界面。UIID 本身属于 app 层，UIManager 只接收字符串 key。
-    public async openById(uiid: string, options?: UIOpenOptions): Promise<Node | null> {
+    public async openById(uiid: string, params?: any): Promise<Node | null> {
         const config = this.getRegisteredConfig(uiid);
         if (!config) return null;
 
-        const openOptions = { ...config, ...options };
+        const openOptions: UIOpenOptions = { ...config, params };
         const pathInfo = this.parseConfig(uiid, openOptions);
         if (!pathInfo) return null;
 
@@ -349,12 +342,9 @@ export class UIManager {
         const layer = this.getLayerNode(options.layer || UILayer.PopUp);
         if (!layer) return null;
 
-        if (options.singleton !== false && layer.has(pathInfo.key)) {
-            const oldNode = layer.get(pathInfo.key);
+        if (layer.has(pathInfo.key)) {
+            const oldNode = layer.show(pathInfo.key, options);
             if (oldNode?.isValid) {
-                oldNode.active = true;
-                oldNode.setSiblingIndex(layer.node.children.length - 1);
-                options.onAdded?.(oldNode, options.data);
                 return oldNode;
             }
         }
@@ -374,10 +364,8 @@ export class UIManager {
             valid: true,
         };
 
-        this.callComponents(node, "onAdded", options.data);
         layer.add(state);
         this.nodeKeyMap.set(node, pathInfo.key);
-        options.onAdded?.(node, options.data);
         console.log(`[UIManager] Open ui success: ${pathInfo.key} -> ${config.layer}`);
         return node;
     }
@@ -692,8 +680,6 @@ export class UIManager {
             prefab: options.prefab || pathInfo.prefabPath,
             layer: options.layer || UILayer.PopUp,
             destroy: options.destroy ?? true,
-            singleton: options.singleton ?? true,
-            blockInput: options.blockInput ?? true,
         };
     }
 
