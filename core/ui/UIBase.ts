@@ -1,4 +1,5 @@
 import { _decorator, Button, Component, EventKeyboard, Input, input, Node } from "cc";
+import { NodePathUtils } from "../utils/NodePathUtils";
 
 const { ccclass } = _decorator;
 
@@ -134,7 +135,7 @@ export class UIBase extends Component {
 
         const button = node.getComponent(Button);
         if (!button) {
-            console.warn(`[UIBase] Button component not found: ${this.getNodePath(node)}`);
+            console.warn(`[UIBase] Button component not found: ${NodePathUtils.getRelativePath(node, this.node)}`);
             return null;
         }
 
@@ -243,19 +244,6 @@ export class UIBase extends Component {
     }
 
     private getTargetName(target: string | Node): string {
-        return typeof target === "string" ? target : this.getNodePath(target);
-    }
-
-    private getNodePath(node: Node): string {
-        const names: string[] = [];
-        let current: Node | null = node;
-
-        while (current) {
-            names.unshift(current.name);
-            if (current === this.node) break;
-            current = current.parent;
-        }
-
-        return names.join("/");
+        return typeof target === "string" ? target : NodePathUtils.getRelativePath(target, this.node);
     }
 }
