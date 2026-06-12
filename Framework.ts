@@ -1,4 +1,5 @@
 import { EventManager } from "./event/EventManager";
+import { message } from "./event/MessageManager";
 import { HttpManager } from "./http/HttpManager";
 import { ResManager } from "./res/ResManager";
 import { SceneManager } from "./scene/SceneManager";
@@ -15,6 +16,7 @@ export class Framework {
     public static readonly UIMgr = new UIManager(resourcesMgr);
 
     public static readonly EventManager = EventManager;
+    public static readonly MessageManager = message;
     public static readonly HttpManager = HttpManager;
     public static readonly StorageMgr = StorageManager;
     public static readonly AesUtils = AesUtils;
