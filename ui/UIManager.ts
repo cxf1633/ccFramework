@@ -202,8 +202,6 @@ export class UIManager {
     public constructor(private readonly res: ResManager) {
     }
 
-    // 直接通过 bundle/prefab 路径打开 UI 的入口暂不开放。
-    // UI 必须先注册到 UIConfigData，再通过 openById(UIID.Xxx) 打开。
     // public async open(path: string, options?: UIOpenOptions): Promise<Node | null>;
     // public async open(bundleName: string, prefabPath: string, options?: UIOpenOptions): Promise<Node | null>;
     // public async open(bundleNameOrPath: string, prefabPathOrOptions?: string | UIOpenOptions, options?: UIOpenOptions): Promise<Node | null> {
@@ -212,7 +210,7 @@ export class UIManager {
     //         console.warn(`[UIManager] Invalid ui path: ${bundleNameOrPath}`);
     //         return null;
     //     }
-    //
+
     //     const openOptions = this.resolveOpenOptions(pathInfo, prefabPathOrOptions, options);
     //     return this.openResolved(pathInfo, openOptions);
     // }
@@ -473,6 +471,13 @@ export class UIManager {
     }
 
     private ensureUIHierarchy(canvas: Canvas): Node {
+        // 兼容旧项目里 Canvas 节点本身就是 gui 的结构。
+        if (canvas.node.name === "gui" && canvas.node.parent?.getChildByName("game")) {
+            const uiCamera = this.getOrCreateChild(canvas.node, "UICamera");
+            uiCamera.setSiblingIndex(0);
+            return canvas.node;
+        }
+
         const uiRoot = this.getOrCreateChild(canvas.node, "UIRoot");
         setupFullScreenNode(uiRoot, canvas.node);
 
