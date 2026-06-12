@@ -202,18 +202,20 @@ export class UIManager {
     public constructor(private readonly res: ResManager) {
     }
 
-    public async open(path: string, options?: UIOpenOptions): Promise<Node | null>;
-    public async open(bundleName: string, prefabPath: string, options?: UIOpenOptions): Promise<Node | null>;
-    public async open(bundleNameOrPath: string, prefabPathOrOptions?: string | UIOpenOptions, options?: UIOpenOptions): Promise<Node | null> {
-        const pathInfo = this.parsePath(bundleNameOrPath, prefabPathOrOptions);
-        if (!pathInfo) {
-            console.warn(`[UIManager] Invalid ui path: ${bundleNameOrPath}`);
-            return null;
-        }
-
-        const openOptions = this.resolveOpenOptions(pathInfo, prefabPathOrOptions, options);
-        return this.openResolved(pathInfo, openOptions);
-    }
+    // 直接通过 bundle/prefab 路径打开 UI 的入口暂不开放。
+    // UI 必须先注册到 UIConfigData，再通过 openById(UIID.Xxx) 打开。
+    // public async open(path: string, options?: UIOpenOptions): Promise<Node | null>;
+    // public async open(bundleName: string, prefabPath: string, options?: UIOpenOptions): Promise<Node | null>;
+    // public async open(bundleNameOrPath: string, prefabPathOrOptions?: string | UIOpenOptions, options?: UIOpenOptions): Promise<Node | null> {
+    //     const pathInfo = this.parsePath(bundleNameOrPath, prefabPathOrOptions);
+    //     if (!pathInfo) {
+    //         console.warn(`[UIManager] Invalid ui path: ${bundleNameOrPath}`);
+    //         return null;
+    //     }
+    //
+    //     const openOptions = this.resolveOpenOptions(pathInfo, prefabPathOrOptions, options);
+    //     return this.openResolved(pathInfo, openOptions);
+    // }
 
     // 通过已注册的 UIID 打开界面。UIID 本身属于 app 层，UIManager 只接收字符串 key。
     public async openById(uiid: string, params?: any): Promise<Node | null> {
@@ -407,16 +409,16 @@ export class UIManager {
         };
     }
 
-    private resolveOpenOptions(pathInfo: UIPathInfo, prefabPathOrOptions?: string | UIOpenOptions, options?: UIOpenOptions): UIOpenOptions {
-        const inlineOptions = typeof prefabPathOrOptions === "object" ? prefabPathOrOptions : options;
-        const registered = this.configMap.get(pathInfo.key) || this.configMap.get(pathInfo.prefabPath);
-        return {
-            ...registered,
-            ...inlineOptions,
-            bundle: inlineOptions?.bundle || registered?.bundle || pathInfo.bundleName,
-            prefab: inlineOptions?.prefab || registered?.prefab || pathInfo.prefabPath,
-        };
-    }
+    // private resolveOpenOptions(pathInfo: UIPathInfo, prefabPathOrOptions?: string | UIOpenOptions, options?: UIOpenOptions): UIOpenOptions {
+    //     const inlineOptions = typeof prefabPathOrOptions === "object" ? prefabPathOrOptions : options;
+    //     const registered = this.configMap.get(pathInfo.key) || this.configMap.get(pathInfo.prefabPath);
+    //     return {
+    //         ...registered,
+    //         ...inlineOptions,
+    //         bundle: inlineOptions?.bundle || registered?.bundle || pathInfo.bundleName,
+    //         prefab: inlineOptions?.prefab || registered?.prefab || pathInfo.prefabPath,
+    //     };
+    // }
 
     // 补齐一次打开请求的默认配置。
     private initConfig(pathInfo: UIPathInfo, options: UIOpenOptions): UIState["config"] {
@@ -471,13 +473,6 @@ export class UIManager {
     }
 
     private ensureUIHierarchy(canvas: Canvas): Node {
-        // 兼容旧项目里 Canvas 节点本身就是 gui 的结构。
-        if (canvas.node.name === "gui" && canvas.node.parent?.getChildByName("game")) {
-            const uiCamera = this.getOrCreateChild(canvas.node, "UICamera");
-            uiCamera.setSiblingIndex(0);
-            return canvas.node;
-        }
-
         const uiRoot = this.getOrCreateChild(canvas.node, "UIRoot");
         setupFullScreenNode(uiRoot, canvas.node);
 
