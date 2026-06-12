@@ -1,4 +1,4 @@
-import { Canvas, director, instantiate, Label, Node, Prefab, tween, Tween, UIOpacity, UITransform, Vec3, Widget } from "cc";
+import { Canvas, director, instantiate, Node, Prefab, UITransform, Vec3, Widget } from "cc";
 import { ResManager } from "../res/ResManager";
 import {
     UI_LAYER_ORDER,
@@ -173,7 +173,7 @@ class UIDialogLayerNode extends UILayerNode {
     }
 }
 
-// UI 管理入口，负责 UI 配置注册、层级初始化、界面打开关闭，以及 Toast/Loading 等系统 UI。
+// UI 管理入口，负责 UI 配置注册、层级初始化、界面打开关闭，以及 Loading 等系统 UI。
 export class UIManager {
     // 越靠后的层 siblingIndex 越高。
     private readonly layerOrder = UI_LAYER_ORDER;
@@ -181,22 +181,15 @@ export class UIManager {
     private readonly layers: Map<UILayer, UILayerNode> = new Map();
     private readonly configMap: Map<string, UIConfig> = new Map();
     private readonly nodeKeyMap: WeakMap<Node, string> = new WeakMap();
-    private toastTweenNode: Tween<Node> | null = null;
-    private toastTweenUIOpacity: Tween<UIOpacity> | null = null;
-    private toastTimer: ReturnType<typeof setTimeout> | null = null;
     private loadingTimer: ReturnType<typeof setTimeout> | null = null;
-    private toastPrefab: Prefab | null = null;
     private loadingPrefab: Prefab | null = null;
-    private toastCreatePromise: Promise<Node | null> | null = null;
     private loadingCreatePromise: Promise<Node | null> | null = null;
-    private toastClearVersion = 0;
     private loadingClearVersion = 0;
 
     public constructor(private readonly res: ResManager) {
     }
 
-    public configureSystemPrefabs(toastPrefab?: Prefab | null, loadingPrefab?: Prefab | null): void {
-        if (toastPrefab) this.toastPrefab = toastPrefab;
+    public configureSystemPrefabs(_toastPrefab?: Prefab | null, loadingPrefab?: Prefab | null): void {
         if (loadingPrefab) this.loadingPrefab = loadingPrefab;
     }
 
@@ -271,7 +264,6 @@ export class UIManager {
 
     public closeAll(layerName?: UILayer, options: UICloseOptions = {}): void {
         if (layerName) {
-            if (layerName === UILayer.Toast) this.closeToast();
             if (layerName === UILayer.System) this.closeLoading();
             this.getLayerNode(layerName)?.clear(options);
             return;
@@ -292,13 +284,6 @@ export class UIManager {
 
     public has(target: string): boolean {
         return !!this.get(target);
-    }
-
-    public closeToast(): void {
-        this.toastClearVersion++;
-        this.clearToastTimer();
-        this.stopToastTween();
-        this.destroyLayerChild(UILayer.Toast, "TipToast");
     }
 
     public waitOpen(): void {
@@ -387,70 +372,6 @@ export class UIManager {
         return instantiate(result.prefab);
     }
 
-    public async showToast(text: string, duration: number = 3, animated: boolean = true): Promise<void> {
-        const layer = this.getLayerNode(UILayer.Toast);
-        if (!layer) return;
-
-        let tipToast = this.getValidLayerChild(layer.node, "TipToast");
-        if (!tipToast) {
-            const clearVersion = this.toastClearVersion;
-            tipToast = await this.getOrCreateToastNode();
-            if (clearVersion !== this.toastClearVersion) {
-                if (tipToast && !tipToast.parent) tipToast.destroy();
-                return;
-            }
-
-            const existingToast = this.getValidLayerChild(layer.node, "TipToast");
-            if (existingToast && existingToast !== tipToast) {
-                if (tipToast && !tipToast.parent) tipToast.destroy();
-                tipToast = existingToast;
-            } else if (tipToast && !tipToast.parent) {
-                tipToast.setPosition(Vec3.ZERO);
-                layer.node.addChild(tipToast);
-                tipToast.active = true;
-            }
-        }
-
-        if (!tipToast || !tipToast.isValid) return;
-
-        this.stopToastTween();
-        this.clearToastTimer();
-        this.setToastText(tipToast, text);
-        tipToast.setSiblingIndex(layer.node.children.length - 1);
-
-        if (animated) {
-            this.playToastAnim(tipToast);
-            return;
-        }
-
-        tipToast.setScale(1, 1, 1);
-        const uiOpacity = tipToast.getComponent(UIOpacity);
-        if (uiOpacity) uiOpacity.opacity = 255;
-        this.toastTimer = setTimeout(() => this.closeToastNode(tipToast), Math.max(0, duration) * 1000);
-    }
-
-    private playToastAnim(tipToast: Node): void {
-        tipToast.setScale(new Vec3(0.8, 0.8, 1));
-        const uiOpacity = tipToast.getComponent(UIOpacity);
-        if (uiOpacity) uiOpacity.opacity = 0;
-
-        this.toastTweenNode = tween(tipToast)
-            .to(0.2, { scale: new Vec3(1, 1, 1) })
-            .start();
-
-        if (!uiOpacity) {
-            this.toastTimer = setTimeout(() => this.closeToastNode(tipToast), 3000);
-            return;
-        }
-
-        this.toastTweenUIOpacity = tween(uiOpacity)
-            .to(0.2, { opacity: 255 })
-            .delay(2.6)
-            .to(0.2, { opacity: 0 })
-            .call(() => this.closeToastNode(tipToast))
-            .start();
-    }
-
     private async openLoading(): Promise<void> {
         const layer = this.getLayerNode(UILayer.System);
         if (!layer) return;
@@ -501,19 +422,6 @@ export class UIManager {
         }
     }
 
-    private getOrCreateToastNode(): Promise<Node | null> {
-        if (!this.toastCreatePromise) {
-            const createPromise = this.createSystemNode(this.toastPrefab, "prefab/TipToast");
-            createPromise.then(
-                () => this.clearToastCreatePromise(createPromise),
-                () => this.clearToastCreatePromise(createPromise),
-            );
-            this.toastCreatePromise = createPromise;
-        }
-
-        return this.toastCreatePromise;
-    }
-
     private getOrCreateLoadingNode(): Promise<Node | null> {
         if (!this.loadingCreatePromise) {
             const createPromise = this.createSystemNode(this.loadingPrefab, "prefab/loading");
@@ -525,12 +433,6 @@ export class UIManager {
         }
 
         return this.loadingCreatePromise;
-    }
-
-    private clearToastCreatePromise(createPromise: Promise<Node | null>): void {
-        if (this.toastCreatePromise === createPromise) {
-            this.toastCreatePromise = null;
-        }
     }
 
     private clearLoadingCreatePromise(createPromise: Promise<Node | null>): void {
@@ -547,14 +449,6 @@ export class UIManager {
         return await this.createResourcesPrefabNode(fallbackPath);
     }
 
-    private setToastText(tipToast: Node, text: string): void {
-        const nestedLabel = tipToast.getChildByName("bg")?.getChildByName("tipLabel")?.getComponent(Label);
-        if (nestedLabel) nestedLabel.string = text;
-
-        const directLabel = tipToast.getChildByName("tipLabel")?.getComponent(Label);
-        if (directLabel) directLabel.string = text;
-    }
-
     private destroyLayerChild(layerName: UILayer, childName: string): void {
         const layer = this.getLayerNode(layerName);
         const children = layer?.node.children.filter((child) => child.name === childName) || [];
@@ -568,40 +462,16 @@ export class UIManager {
         return parent.children.find((child) => child.name === childName && child.isValid) || null;
     }
 
-    private closeToastNode(target: Node): void {
-        this.clearToastTimer();
-        this.stopToastTween();
-        if (target?.isValid) target.destroy();
-    }
-
     private closeLoadingNode(target: Node): void {
         this.clearLoadingTimer();
         if (target?.isValid) target.destroy();
     }
 
     private clearSystemUIState(): void {
-        this.toastClearVersion++;
         this.loadingClearVersion++;
-        this.clearToastTimer();
-        this.stopToastTween();
         this.clearLoadingTimer();
-        this.toastCreatePromise = null;
         this.loadingCreatePromise = null;
-        this.destroyLayerChild(UILayer.Toast, "TipToast");
         this.destroyLayerChild(UILayer.System, "loading");
-    }
-
-    private stopToastTween(): void {
-        this.toastTweenNode?.stop();
-        this.toastTweenNode = null;
-        this.toastTweenUIOpacity?.stop();
-        this.toastTweenUIOpacity = null;
-    }
-
-    private clearToastTimer(): void {
-        if (!this.toastTimer) return;
-        clearTimeout(this.toastTimer);
-        this.toastTimer = null;
     }
 
     private clearLoadingTimer(): void {
