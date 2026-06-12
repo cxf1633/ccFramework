@@ -1,4 +1,4 @@
-import { Canvas, director, instantiate, Node, Prefab, UITransform, Vec3, Widget } from "cc";
+import { Canvas, director, instantiate, Node, UITransform, Vec3, Widget } from "cc";
 import { ResManager } from "../res/ResManager";
 import {
     UI_LAYER_ORDER,
@@ -190,7 +190,7 @@ class UIDialogLayerNode extends UILayerNode {
     }
 }
 
-// UI 管理入口，负责 UI 配置注册、层级初始化、界面打开关闭，以及 Loading 等系统 UI。
+// UI 管理入口，负责 UI 配置注册、层级初始化、界面打开关闭。
 export class UIManager {
     // 越靠后的层 siblingIndex 越高。
     private readonly layerOrder = UI_LAYER_ORDER;
@@ -198,16 +198,8 @@ export class UIManager {
     private readonly layers: Map<UILayer, UILayerNode> = new Map();
     private readonly configMap: Map<string, UIConfig> = new Map();
     private readonly nodeKeyMap: WeakMap<Node, string> = new WeakMap();
-    private loadingTimer: ReturnType<typeof setTimeout> | null = null;
-    private loadingPrefab: Prefab | null = null;
-    private loadingCreatePromise: Promise<Node | null> | null = null;
-    private loadingClearVersion = 0;
 
     public constructor(private readonly res: ResManager) {
-    }
-
-    public configureSystemPrefabs(loadingPrefab?: Prefab | null): void {
-        if (loadingPrefab) this.loadingPrefab = loadingPrefab;
     }
 
     public async open(path: string, options?: UIOpenOptions): Promise<Node | null>;
@@ -281,12 +273,10 @@ export class UIManager {
 
     public closeAll(layerName?: UILayer, options: UICloseOptions = {}): void {
         if (layerName) {
-            if (layerName === UILayer.System) this.closeLoading();
             this.getLayerNode(layerName)?.clear(options);
             return;
         }
 
-        this.clearSystemUIState();
         this.layers.forEach((layer) => layer.clear(options));
     }
 
@@ -301,24 +291,6 @@ export class UIManager {
 
     public has(target: string): boolean {
         return !!this.get(target);
-    }
-
-    public waitOpen(): void {
-        void this.openLoading();
-    }
-
-    public waitClose(): void {
-        this.closeLoading();
-    }
-
-    public closeLoading(): void {
-        this.loadingClearVersion++;
-        this.clearLoadingTimer();
-        this.destroyLayerChild(UILayer.System, "loading");
-    }
-
-    public cancelLoadingAutoClose(): void {
-        this.clearLoadingTimer();
     }
 
     private openResolved(pathInfo: UIPathInfo, openOptions: UIOpenOptions): Promise<Node | null> {
@@ -382,114 +354,6 @@ export class UIManager {
         }
 
         return instantiate(result.prefab);
-    }
-
-    private async openLoading(): Promise<void> {
-        const layer = this.getLayerNode(UILayer.System);
-        if (!layer) return;
-
-        let tipLoading = this.getValidLayerChild(layer.node, "loading");
-        if (tipLoading) {
-            tipLoading.setSiblingIndex(layer.node.children.length - 1);
-            return;
-        }
-
-        const clearVersion = this.loadingClearVersion;
-        tipLoading = await this.getOrCreateLoadingNode();
-        if (clearVersion !== this.loadingClearVersion) {
-            if (tipLoading && !tipLoading.parent) tipLoading.destroy();
-            return;
-        }
-
-        const existingLoading = this.getValidLayerChild(layer.node, "loading");
-        if (existingLoading && existingLoading !== tipLoading) {
-            if (tipLoading && !tipLoading.parent) tipLoading.destroy();
-            tipLoading = existingLoading;
-        } else if (tipLoading && !tipLoading.parent) {
-            tipLoading.setPosition(Vec3.ZERO);
-            layer.node.addChild(tipLoading);
-            tipLoading.active = true;
-        }
-
-        if (!tipLoading || !tipLoading.isValid) return;
-
-        tipLoading.setSiblingIndex(layer.node.children.length - 1);
-
-        this.clearLoadingTimer();
-        this.loadingTimer = setTimeout(() => this.closeLoadingNode(tipLoading), 10000);
-    }
-
-    private async createResourcesPrefabNode(prefabPath: string): Promise<Node | null> {
-        try {
-            const result = await this.res.loadPrefabFromBundle("resources", prefabPath);
-            if (!result.success || !result.prefab) {
-                console.warn(`[UIManager] Create resources prefab failed: resources/${prefabPath}. Bundle must be loaded by app startup before use.`, result.error);
-                return null;
-            }
-
-            return instantiate(result.prefab);
-        } catch (err) {
-            console.warn(`[UIManager] Create resources prefab failed: resources/${prefabPath}`, err);
-            return null;
-        }
-    }
-
-    private getOrCreateLoadingNode(): Promise<Node | null> {
-        if (!this.loadingCreatePromise) {
-            const createPromise = this.createSystemNode(this.loadingPrefab, "prefab/loading");
-            createPromise.then(
-                () => this.clearLoadingCreatePromise(createPromise),
-                () => this.clearLoadingCreatePromise(createPromise),
-            );
-            this.loadingCreatePromise = createPromise;
-        }
-
-        return this.loadingCreatePromise;
-    }
-
-    private clearLoadingCreatePromise(createPromise: Promise<Node | null>): void {
-        if (this.loadingCreatePromise === createPromise) {
-            this.loadingCreatePromise = null;
-        }
-    }
-
-    private async createSystemNode(prefab: Prefab | null, fallbackPath: string): Promise<Node | null> {
-        if (prefab?.isValid) {
-            return instantiate(prefab);
-        }
-
-        return await this.createResourcesPrefabNode(fallbackPath);
-    }
-
-    private destroyLayerChild(layerName: UILayer, childName: string): void {
-        const layer = this.getLayerNode(layerName);
-        const children = layer?.node.children.filter((child) => child.name === childName) || [];
-        children.forEach((child) => {
-            if (child?.isValid) child.destroy();
-        });
-    }
-
-    private getValidLayerChild(parent: Node | null | undefined, childName: string): Node | null {
-        if (!parent?.isValid) return null;
-        return parent.children.find((child) => child.name === childName && child.isValid) || null;
-    }
-
-    private closeLoadingNode(target: Node): void {
-        this.clearLoadingTimer();
-        if (target?.isValid) target.destroy();
-    }
-
-    private clearSystemUIState(): void {
-        this.loadingClearVersion++;
-        this.clearLoadingTimer();
-        this.loadingCreatePromise = null;
-        this.destroyLayerChild(UILayer.System, "loading");
-    }
-
-    private clearLoadingTimer(): void {
-        if (!this.loadingTimer) return;
-        clearTimeout(this.loadingTimer);
-        this.loadingTimer = null;
     }
 
     private removeFromLayers(target: string | Node, options: UICloseOptions): boolean {

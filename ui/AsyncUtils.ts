@@ -58,6 +58,7 @@ export class AsyncUtils {
      * @returns Promise<void>
      */
     static WaitForEvent(event: string, expectedData: any = null): Promise<void> {
+        Logger.log(`等待事件: ${event}, 期望数据: ${expectedData}`);
         return new Promise((resolve, reject) => {
             let isResolved = false;
 
@@ -91,7 +92,7 @@ export class AsyncUtils {
      * @param expectedData 期望的数据
      */
     static ResolveEvent(event: string, expectedData: any = null) {
-        Logger.log(`ResolveEvent: ${event}, expectedData: ${expectedData}`);
+        Logger.log(`触发事件: ${event}, 数据: ${expectedData}`);
         message.dispatchMessage(event, expectedData);
     }
 }
