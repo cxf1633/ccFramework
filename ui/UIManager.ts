@@ -20,7 +20,6 @@ interface UIState {
     config: Required<Pick<UIConfig, "prefab" | "layer" | "destroy">> & UIConfig;
     node: Node;
     param: UIOpenParam;
-    valid: boolean;
 }
 
 interface DialogRequest {
@@ -68,7 +67,6 @@ class UILayerNode {
             const destroy = options.destroy ?? state.config.destroy;
             if (destroy) {
                 this.states.delete(state.key);
-                state.valid = false;
                 state.node.destroy();
             } else {
                 state.node.active = false;
@@ -115,7 +113,6 @@ class UILayerNode {
         this.callComponents(state.node, "setShowParams", state.param.params);
         state.node.active = true;
         state.node.setSiblingIndex(this.node.children.length - 1);
-        state.valid = true;
         if (wasActive) {
             this.callComponents(state.node, "onShow", state.param.params);
         }
@@ -134,14 +131,17 @@ class UILayerNode {
 class UIDialogLayerNode extends UILayerNode {
     private readonly queue: DialogRequest[] = [];
     private currentKey: string | null = null;
+    private opening = false;
+    private openNow: ((request: DialogRequest) => Promise<Node | null>) | null = null;
 
     public enqueue(request: DialogRequest, openNow: (request: DialogRequest) => Promise<Node | null>): void {
-        if (this.currentKey || this.stateCount() > 0) {
+        this.openNow = openNow;
+        if (this.opening || this.currentKey || this.stateCount() > 0) {
             this.queue.push(request);
             return;
         }
 
-        this.openRequest(request, openNow);
+        this.openRequest(request);
     }
 
     public override add(state: UIState): Node {
@@ -159,17 +159,34 @@ class UIDialogLayerNode extends UILayerNode {
     }
 
     private next(): void {
+        if (this.opening || this.currentKey || this.stateCount() > 0) return;
+
         const request = this.queue.shift();
         if (!request) return;
-        this.openRequest(request, this.pendingOpen!);
+        this.openRequest(request);
     }
 
-    private pendingOpen: ((request: DialogRequest) => Promise<Node | null>) | null = null;
+    private async openRequest(request: DialogRequest): Promise<void> {
+        if (!this.openNow) {
+            request.resolve(null);
+            return;
+        }
 
-    private async openRequest(request: DialogRequest, openNow: (request: DialogRequest) => Promise<Node | null>): Promise<void> {
-        this.pendingOpen = openNow;
-        const node = await openNow(request);
+        this.opening = true;
+        let node: Node | null = null;
+        try {
+            node = await this.openNow(request);
+        } catch (err) {
+            console.warn(`[UIManager] Open dialog failed: ${request.pathInfo.key}`, err);
+        } finally {
+            this.opening = false;
+        }
+
         request.resolve(node);
+
+        if (!node) {
+            setTimeout(() => this.next(), 0);
+        }
     }
 }
 
@@ -189,7 +206,7 @@ export class UIManager {
     public constructor(private readonly res: ResManager) {
     }
 
-    public configureSystemPrefabs(_toastPrefab?: Prefab | null, loadingPrefab?: Prefab | null): void {
+    public configureSystemPrefabs(loadingPrefab?: Prefab | null): void {
         if (loadingPrefab) this.loadingPrefab = loadingPrefab;
     }
 
@@ -304,10 +321,6 @@ export class UIManager {
         this.clearLoadingTimer();
     }
 
-    public getLayer(layerName: UILayer): Node | null {
-        return this.getLayerNode(layerName)?.node || null;
-    }
-
     private openResolved(pathInfo: UIPathInfo, openOptions: UIOpenOptions): Promise<Node | null> {
         const layerName = openOptions.layer || UILayer.PopUp;
         const layer = this.getLayerNode(layerName);
@@ -346,7 +359,6 @@ export class UIManager {
             config,
             node,
             param: options,
-            valid: true,
         };
 
         layer.add(state);
@@ -630,13 +642,6 @@ export class UIManager {
             parent.addChild(child);
         }
         return child;
-    }
-
-    private callComponents(node: Node, methodName: string, data: any): void {
-        for (const component of node.components) {
-            const method = (component as any)[methodName];
-            if (typeof method === "function") method.call(component, data);
-        }
     }
 }
 
