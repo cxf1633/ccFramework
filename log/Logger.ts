@@ -102,7 +102,8 @@ export class Logger {
      * @param color 日志文本颜色
      */
     private static print(args: any[], color: string) {
-        const backLog = color == LogColor.Red ? error : log;
+        const browserConsole = typeof console !== "undefined" ? console : null;
+        const backLog = color == LogColor.Red ? browserConsole?.error : browserConsole?.log;
         const timeStr = this.getDateString();
         const textParts: string[] = [timeStr];
         const objectArgs: any[] = [];
@@ -120,7 +121,13 @@ export class Logger {
         logArgs.push(...objectArgs);
 
         // 使用 apply 来传递所有参数
-        backLog.apply(null, logArgs);
+        if (browserConsole && backLog) {
+            backLog.apply(browserConsole, logArgs);
+            return;
+        }
+
+        const ccLog = color == LogColor.Red ? error : log;
+        ccLog.apply(null, logArgs);
     }
 
     private static safeStringify(value: any): string {
