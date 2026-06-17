@@ -1,4 +1,4 @@
-import { _decorator, Button, Component, EventKeyboard, Input, input, Node } from "cc";
+import { _decorator, Button, Component, EventKeyboard, Input, input, Label, Node } from "cc";
 import { NodePathUtils } from "../utils/NodePathUtils";
 
 const { ccclass } = _decorator;
@@ -104,6 +104,20 @@ export class UIBase extends Component {
         }
 
         return this.findNodeByPath(name);
+    }
+
+    protected setLabelText(target: string | Node | null | undefined, text: string | number): void {
+        const node = typeof target === "string" ? this.getNode(target) : target;
+        const label = node?.getComponent(Label);
+        if (label) {
+            label.string = String(text);
+        }
+    }
+
+    protected setActive(node: Node | null | undefined, active: boolean): void {
+        if (node?.isValid) {
+            node.active = active;
+        }
     }
 
     protected nodeTreeInfoLite(): void {
