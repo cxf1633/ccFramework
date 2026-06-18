@@ -55,6 +55,24 @@ export class NodePathUtils {
     }
 
     /**
+     * 从指定根节点开始，按相对路径查找子节点。
+     */
+    public static getChildByPath(root: Node | null | undefined, path: string): Node | null {
+        const names = path.split("/").filter(Boolean);
+        let current = root || null;
+        if (current && names[0] === current.name) {
+            names.shift();
+        }
+
+        for (const name of names) {
+            current = current?.getChildByName(name) || null;
+            if (!current) return null;
+        }
+
+        return current;
+    }
+
+    /**
      * 按参数生成节点路径。
      */
     public static getPath(node: Node | null, options: NodePathOptions = {}): string {

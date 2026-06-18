@@ -45,6 +45,7 @@ export class NumberFormatUtils {
      * - 小于 1,000 时不加单位，但仍按 decimalPlaces 格式化。
      */
     public static formatChipText(value: number, options: QuantityFormatOptions = {}): string {
+        options.decimalPlaces = 0;
         return this.formatQuantityText(value, this.CHIP_UNITS, options);
     }
 
