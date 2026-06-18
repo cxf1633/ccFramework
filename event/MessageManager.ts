@@ -79,7 +79,8 @@ export class MessageManager {
     public dispatchMessage(messageType: string, message: any = null): void {
         const entries = this.listeners.get(messageType);
 
-        Logger.netLog("[事件消息]", messageType, message);
+        // Logger.netLog("[事件消息]", messageType, message);
+        Logger.netLog("[事件消息]", messageType, JSON.stringify(message));
 
         if (entries && entries.length > 0) {
             entries.slice().forEach((entry) => {
