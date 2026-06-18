@@ -7,9 +7,18 @@
     "NET_ERROR_6": "Connection lost (Error code: %{code})",
     "NET_ERROR_7": "Reconnection successful",
     "NET_ERROR_8": "Reconnection failed",
+    "ERROR_100": "User not logged in",
+    "ERROR_101": "User disabled",
+    "ERROR_102": "User account deactivated",
+    "ERROR_300": "Parameter error",
+    "ERROR_301": "Server error",
+    "ERROR_302": "Insufficient currency",
+    "ERROR_303": "Configuration not found",
+    "ERROR_304": "Task not found",
+    "ERROR_305": "Reward already claimed",
     "SYSTEM_1": "confirm",
     "SYSTEM_2": "cancel",
     "SYSTEM_3": "We have detected that you are still in the room",
     "SYSTEM_4": "TIME OUT",
-    "SYSTEM_5": "Two consecutive timeouts, Let’s take a break."
+    "SYSTEM_5": "Two consecutive timeouts, let's take a break."
 }
