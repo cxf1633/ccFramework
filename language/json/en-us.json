@@ -20,5 +20,6 @@
     "SYSTEM_2": "cancel",
     "SYSTEM_3": "We have detected that you are still in the room",
     "SYSTEM_4": "TIME OUT",
-    "SYSTEM_5": "Two consecutive timeouts, let's take a break."
+    "SYSTEM_5": "Two consecutive timeouts, let's take a break.",
+    "SYSTEM_6": "Two consecutive timeouts, let's take a break."
 }
