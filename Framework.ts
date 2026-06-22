@@ -1,7 +1,7 @@
 import { EventManager } from "./event/EventManager";
 import { message } from "./event/MessageManager";
 import { HttpManager } from "./http/HttpManager";
-import { LanguageManager } from "./language/Language";
+import { LanguageManager } from "./i18n/Language";
 import { ResManager } from "./res/ResManager";
 import { SceneManager } from "./scene/SceneManager";
 import { StorageManager } from "./storage/StorageManager";
