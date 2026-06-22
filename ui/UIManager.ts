@@ -149,6 +149,10 @@ class UIDialogLayerNode extends UILayerNode {
         return super.add(state);
     }
 
+    public isBusy(): boolean {
+        return this.opening || !!this.currentKey || this.stateCount() > 0;
+    }
+
     public override remove(target: string | Node, options: UICloseOptions = {}): boolean {
         const removed = super.remove(target, options);
         if (removed) {
@@ -225,6 +229,31 @@ export class UIManager {
         if (!pathInfo) return null;
 
         return this.openResolved(pathInfo, openOptions);
+    }
+
+    public openPreloadedById(uiid: string, params?: any): Node | null {
+        const config = this.getRegisteredConfig(uiid);
+        if (!config) return null;
+
+        const openOptions: UIOpenOptions = { ...config, params };
+        const pathInfo = this.parseConfig(uiid, openOptions);
+        if (!pathInfo) return null;
+
+        return this.openPreloadedResolved(pathInfo, openOptions);
+    }
+
+    public async preloadById(uiid: string): Promise<boolean> {
+        const config = this.getRegisteredConfig(uiid);
+        if (!config) return false;
+
+        const pathInfo = this.parseConfig(uiid, config);
+        if (!pathInfo) return false;
+
+        return await this.res.preloadPrefabFromBundle(pathInfo.bundleName, pathInfo.prefabPath);
+    }
+
+    public async preloadByIds(uiids: readonly string[]): Promise<void> {
+        await Promise.all(uiids.map((uiid) => this.preloadById(uiid)));
     }
 
     public closeById(uiid: string, options: UICloseOptions = {}): boolean {
@@ -308,6 +337,19 @@ export class UIManager {
         return this.openNow(pathInfo, openOptions);
     }
 
+    private openPreloadedResolved(pathInfo: UIPathInfo, openOptions: UIOpenOptions): Node | null {
+        const layerName = openOptions.layer || UILayer.PopUp;
+        const layer = this.getLayerNode(layerName);
+        if (!layer) return null;
+
+        if (layer instanceof UIDialogLayerNode && layer.isBusy()) {
+            console.warn(`[UIManager] Cannot open preloaded dialog while busy: ${pathInfo.key}`);
+            return null;
+        }
+
+        return this.openPreloadedNow(pathInfo, openOptions);
+    }
+
     private async openNow(pathInfo: UIPathInfo, options: UIOpenOptions): Promise<Node | null> {
         const layer = this.getLayerNode(options.layer || UILayer.PopUp);
         if (!layer) return null;
@@ -339,6 +381,37 @@ export class UIManager {
         return node;
     }
 
+    private openPreloadedNow(pathInfo: UIPathInfo, options: UIOpenOptions): Node | null {
+        const layer = this.getLayerNode(options.layer || UILayer.PopUp);
+        if (!layer) return null;
+
+        if (layer.has(pathInfo.key)) {
+            const oldNode = layer.show(pathInfo.key, options);
+            if (oldNode?.isValid) {
+                return oldNode;
+            }
+        }
+
+        const node = this.createPreloadedNode(pathInfo.bundleName, pathInfo.prefabPath);
+        if (!node || !node.isValid) {
+            console.error(`[UIManager] Preloaded ui missing: ${pathInfo.key}.`);
+            return null;
+        }
+
+        const config = this.initConfig(pathInfo, options);
+        const state: UIState = {
+            key: pathInfo.key,
+            config,
+            node,
+            param: options,
+        };
+
+        layer.add(state);
+        this.nodeKeyMap.set(node, pathInfo.key);
+        console.log(`[UIManager] Open preloaded ui success: ${pathInfo.key} -> ${config.layer}`);
+        return node;
+    }
+
     private async createNode(bundleName: string, prefabPath: string): Promise<Node | null> {
         try {
             await this.res.ensureBundle(bundleName, { cacheable: true });
@@ -354,6 +427,15 @@ export class UIManager {
         }
 
         return instantiate(result.prefab);
+    }
+
+    private createPreloadedNode(bundleName: string, prefabPath: string): Node | null {
+        const prefab = this.res.getCachedPrefabFromBundle(bundleName, prefabPath);
+        if (!prefab) {
+            return null;
+        }
+
+        return instantiate(prefab);
     }
 
     private removeFromLayers(target: string | Node, options: UICloseOptions): boolean {

@@ -168,6 +168,21 @@ export class ResManager {
         return result;
     }
 
+    public getCachedPrefabFromBundle(bundleName: string, prefabPath: string): Prefab | null {
+        return this.prefabCache.get(this.getPrefabCacheKey(bundleName, prefabPath)) || null;
+    }
+
+    public async preloadPrefabFromBundle(bundleName: string, prefabPath: string): Promise<boolean> {
+        try {
+            await this.ensureBundle(bundleName, { cacheable: true });
+            const result = await this.loadPrefabFromBundle(bundleName, prefabPath);
+            return result.success;
+        } catch (error) {
+            console.warn(`Prefab preload failed: ${bundleName}/${prefabPath}`, error);
+            return false;
+        }
+    }
+
     public clearPrefabCache(prefabPath: string, bundleName?: string): void {
         if (bundleName) {
             this.prefabCache.delete(this.getPrefabCacheKey(bundleName, prefabPath));

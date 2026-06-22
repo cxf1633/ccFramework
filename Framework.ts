@@ -19,7 +19,7 @@ export class Framework {
     public static readonly EventManager = EventManager;
     public static readonly MessageManager = message;
     public static readonly HttpManager = HttpManager;
-    public static readonly LanguageMgr = LanguageManager.GetInstance();
+    public static readonly LanguageMgr = LanguageManager.getInstance();
     public static readonly StorageMgr = StorageManager;
     public static readonly AesUtils = AesUtils;
     public static readonly ZlibUtils = ZlibUtils;
