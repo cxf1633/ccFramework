@@ -1,4 +1,4 @@
-import { CCString, Component, Label, RichText, TTFFont, _decorator, warn } from "cc";
+import { CCString, Component, Enum, Label, RichText, TTFFont, _decorator, warn } from "cc";
 import { EDITOR } from "cc/env";
 import { LanguageData } from "./LanguageData";
 
@@ -12,6 +12,14 @@ export class LangLabelParamsItem {
     @property
     value: string = "";
 }
+
+export enum LanguageLabelFirstLetterCase {
+    Original = 0,
+    Upper = 1,
+    Lower = 2,
+}
+
+Enum(LanguageLabelFirstLetterCase);
 
 @ccclass("LanguageLabel")
 @menu("GameFramework/Language/LanguageLabel")
@@ -52,8 +60,11 @@ export class LanguageLabel extends Component {
         }
     }
 
-    @property({ displayName: "首字母大写" })
-    public capitalizeFirstLetter: boolean = false;
+    @property({
+        type: LanguageLabelFirstLetterCase,
+        displayName: "首字母处理",
+    })
+    public firstLetterCase: LanguageLabelFirstLetterCase = LanguageLabelFirstLetterCase.Original;
 
     private _needUpdate: boolean = false;
     public initFontSize: number = 0;
@@ -64,7 +75,7 @@ export class LanguageLabel extends Component {
             warn("[LanguageLabel] no language found, using dataID to replace");
             value = this._dataID;
         }
-        return this.capitalizeFirstLetter ? this.capitalizeTextFirstLetter(value) : value;
+        return this.applyFirstLetterCase(value);
     }
 
     public language(): void {
@@ -130,11 +141,19 @@ export class LanguageLabel extends Component {
         warn("[LanguageLabel] cc.Label or cc.RichText component not found");
     }
 
-    private capitalizeTextFirstLetter(value: string): string {
+    private applyFirstLetterCase(value: string): string {
         if (!value) {
             return value;
         }
 
-        return value.charAt(0).toUpperCase() + value.slice(1);
+        switch (this.firstLetterCase) {
+            case LanguageLabelFirstLetterCase.Upper:
+                return value.charAt(0).toUpperCase() + value.slice(1);
+            case LanguageLabelFirstLetterCase.Lower:
+                return value.charAt(0).toLowerCase() + value.slice(1);
+            case LanguageLabelFirstLetterCase.Original:
+            default:
+                return value;
+        }
     }
 }
