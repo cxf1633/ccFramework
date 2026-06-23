@@ -52,6 +52,9 @@ export class LanguageLabel extends Component {
         }
     }
 
+    @property({ displayName: "首字母大写" })
+    public capitalizeFirstLetter: boolean = false;
+
     private _needUpdate: boolean = false;
     public initFontSize: number = 0;
 
@@ -61,7 +64,7 @@ export class LanguageLabel extends Component {
             warn("[LanguageLabel] no language found, using dataID to replace");
             value = this._dataID;
         }
-        return value;
+        return this.capitalizeFirstLetter ? this.capitalizeTextFirstLetter(value) : value;
     }
 
     public language(): void {
@@ -125,5 +128,13 @@ export class LanguageLabel extends Component {
         }
 
         warn("[LanguageLabel] cc.Label or cc.RichText component not found");
+    }
+
+    private capitalizeTextFirstLetter(value: string): string {
+        if (!value) {
+            return value;
+        }
+
+        return value.charAt(0).toUpperCase() + value.slice(1);
     }
 }
