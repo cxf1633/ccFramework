@@ -1,4 +1,5 @@
 import { _decorator, Button, Component, EventKeyboard, Input, input, Label, Node } from "cc";
+import { Framework } from "../Framework";
 import { NodePathUtils } from "../utils/NodePathUtils";
 
 const { ccclass } = _decorator;
@@ -65,6 +66,10 @@ export class UIBase extends Component {
     }
     protected onHide(): void {
 
+    }
+
+    public btn_close(): void {
+        Framework.UIMgr.close(this.node);
     }
 
     /**
