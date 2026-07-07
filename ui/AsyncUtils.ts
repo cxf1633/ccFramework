@@ -7,83 +7,135 @@ export class AsyncUtils {
      * 等待指定秒数
      * @param component 调用此方法的组件实例，用于调度
      * @param seconds 等待的秒数
-     * @returns Promise<void>
+     * @returns true 表示正常等待完成；false 表示等待期间组件被禁用或销毁
      */
-    static WaitForSeconds(component: Component, seconds: number): Promise<void> {
-        return new Promise((resolve, reject) => {
-            let isResolved = false;
-            let isScheduled = false;
+    static WaitForSeconds(component: Component, seconds: number): Promise<boolean> {
+        return new Promise((resolve) => {
             let timeoutId: number = -1;
+            let isResolved = false;
+            const node = component.node;
+            const nodeDestroyedEvent = (Node.EventType as any).NODE_DESTROYED;
 
-            const onDisable = () => {
-                if (isScheduled && !isResolved) {
-                    // 清除定时器
-                    if (timeoutId !== -1) {
-                        clearTimeout(timeoutId);
-                        timeoutId = -1;
-                    }
-                    isScheduled = false;
-                    // reject(new Error('Component disabled during wait'));
+            function cleanup() {
+                if (timeoutId !== -1) {
+                    clearTimeout(timeoutId);
+                    timeoutId = -1;
                 }
-            };
+                if (node?.isValid) {
+                    node.off(Node.EventType.ACTIVE_IN_HIERARCHY_CHANGED, onActiveChanged);
+                    if (nodeDestroyedEvent) {
+                        node.off(nodeDestroyedEvent, finishCanceled);
+                    }
+                }
+            }
 
-            // 监听节点禁用事件
-            component.node.on(Node.EventType.ACTIVE_IN_HIERARCHY_CHANGED, onDisable);
+            function finish(completed: boolean) {
+                if (isResolved) {
+                    return;
+                }
 
-            // 立即检查当前状态
-            if (!component.node.activeInHierarchy) {
-                component.node.off(Node.EventType.ACTIVE_IN_HIERARCHY_CHANGED, onDisable);
-                // reject(new Error('Component is already disabled'));
+                isResolved = true;
+                cleanup();
+                resolve(completed && component.isValid && !!node?.isValid && node.activeInHierarchy);
+            }
+
+            function finishCanceled() {
+                finish(false);
+            }
+
+            function onActiveChanged() {
+                if (!node?.isValid || !node.activeInHierarchy) {
+                    finish(false);
+                }
+            }
+
+            if (!component.isValid || !node?.isValid || !node.activeInHierarchy) {
+                resolve(false);
                 return;
             }
 
-            isScheduled = true;
-            // 使用 setTimeout 替代 scheduleOnce，这样可以更好地控制
-            timeoutId = setTimeout(() => {
-                if (!isResolved && component.isValid && component.node.activeInHierarchy) {
-                    isResolved = true;
-                    isScheduled = false;
-                    timeoutId = -1;
-                    component.node.off(Node.EventType.ACTIVE_IN_HIERARCHY_CHANGED, onDisable);
-                    resolve();
-                }
-            }, seconds * 1000);
+            node.on(Node.EventType.ACTIVE_IN_HIERARCHY_CHANGED, onActiveChanged);
+            if (nodeDestroyedEvent) {
+                node.once(nodeDestroyedEvent, finishCanceled);
+            }
+            timeoutId = setTimeout(() => finish(true), Math.max(0, seconds) * 1000);
         });
     }
 
     /**
      * 等待特定事件触发
+     * @param component 调用此方法的组件实例，用于监听节点生命周期
      * @param event 事件名称
      * @param expectedData 期望的数据
-     * @returns Promise<void>
+     * @returns true 表示事件正常触发；false 表示等待期间组件被禁用或销毁
      */
-    static WaitForEvent(event: string, expectedData: any = null): Promise<void> {
+    static WaitForEvent(component: Component, event: string, expectedData: any = null): Promise<boolean> {
+        const node = component.node;
+        const nodeDestroyedEvent = (Node.EventType as any).NODE_DESTROYED;
+
         Logger.log(`等待事件: ${event}, 期望数据: ${expectedData}`);
-        return new Promise((resolve, reject) => {
+        return new Promise((resolve) => {
             let isResolved = false;
 
-            const handler = (eventName: string, receivedData: any) => {
+            function cleanup() {
+                message.off(event, handler, null);
+                if (node?.isValid) {
+                    node.off(Node.EventType.ACTIVE_IN_HIERARCHY_CHANGED, onActiveChanged);
+                    if (nodeDestroyedEvent) {
+                        node.off(nodeDestroyedEvent, finishCanceled);
+                    }
+                }
+            }
+
+            function finish(completed: boolean) {
+                if (isResolved) {
+                    return;
+                }
+
+                isResolved = true;
+                cleanup();
+                resolve(completed && component.isValid && !!node?.isValid && node.activeInHierarchy);
+            }
+
+            function finishCanceled() {
+                finish(false);
+            }
+
+            function onActiveChanged() {
+                if (!node?.isValid || !node.activeInHierarchy) {
+                    finish(false);
+                }
+            }
+
+            function handler(eventName: string, receivedData: any) {
                 // 如果已经解析过，直接返回
                 if (isResolved) return;
 
                 // 如果没有指定期望的数据，则任何消息都会触发
                 if (expectedData === null) {
-                    isResolved = true;
-                    message.off(event, handler, null);
-                    resolve();
+                    finish(true);
                     return;
                 }
 
                 // 比较接收到的数据与期望的数据
                 if (receivedData === expectedData) {
-                    isResolved = true;
-                    message.off(event, handler, null);
-                    resolve();
+                    finish(true);
                 }
                 // 如果数据不匹配，继续等待
-            };
+            }
+
+            if (!component.isValid || !node?.isValid || !node.activeInHierarchy) {
+                resolve(false);
+                return;
+            }
 
             message.on(event, handler, null);
+            if (node?.isValid) {
+                node.on(Node.EventType.ACTIVE_IN_HIERARCHY_CHANGED, onActiveChanged);
+                if (nodeDestroyedEvent) {
+                    node.once(nodeDestroyedEvent, finishCanceled);
+                }
+            }
         });
     }
     /**
