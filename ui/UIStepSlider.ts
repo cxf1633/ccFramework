@@ -118,6 +118,6 @@ export class UIStepSlider extends Slider {
     }
 
     private emitStepChanged(): void {
-        this.node.emit(UIStepSlider.STEP_CHANGED_EVENT, this.selectedIndex, this.progress);
+        this.node.emit(UIStepSlider.STEP_CHANGED_EVENT, this.selectedIndex, this.progress, this);
     }
 }
