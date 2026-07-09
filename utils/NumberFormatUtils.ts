@@ -2,7 +2,7 @@
  * 数量文本格式化参数。
  */
 export interface QuantityFormatOptions {
-    /** 小数位数，默认 2。 */
+    /** 小数位数。默认值由具体格式化 API 决定；formatQuantityText 与 formatChipText 当前都为 2。 */
     decimalPlaces?: number;
     /** 取整模式，默认四舍五入；floor 表示按显示精度向下截断。 */
     roundingMode?: "round" | "floor";
@@ -22,13 +22,12 @@ interface QuantityUnit {
  *
  * 常用写法：
  * ```ts
- * NumberFormatUtils.formatChipText(50.56); // "50"
- * NumberFormatUtils.formatChipText(1500); // "1K"
- * NumberFormatUtils.formatChipText(1500, { decimalPlaces: 2 }); // "1.50K"
- * NumberFormatUtils.formatChipText(1500, { decimalPlaces: 2, trimTrailingZeros: true }); // "1.5K"
+ * NumberFormatUtils.formatChipText(50.56); // "50.56"
+ * NumberFormatUtils.formatChipText(1500); // "1.5K"
+ * NumberFormatUtils.formatChipText(1500, { trimTrailingZeros: false }); // "1.50K"
  * NumberFormatUtils.formatChipText(1500, { decimalPlaces: 2, european: true }); // "1,50K"
- * NumberFormatUtils.formatChipText(2_500_000); // "2M"
- * NumberFormatUtils.formatChipText(499_997_350); // "499M"
+ * NumberFormatUtils.formatChipText(2_500_000); // "2.5M"
+ * NumberFormatUtils.formatChipText(499_997_350); // "499.99M"
  * ```
  */
 export class NumberFormatUtils {
@@ -45,15 +44,19 @@ export class NumberFormatUtils {
      * - >= 1,000 使用 K；
      * - >= 1,000,000 使用 M；
      * - >= 1,000,000,000 使用 B；
-     * - 默认不保留小数；
+     * - 默认最多保留 2 位小数，并移除末尾无意义的 0；
      * - 默认向下截断，避免 499.99M 显示成 500M；
      * - 小于 1,000 时不加单位，但仍按 decimalPlaces 格式化。
      */
-    public static formatChipText(value: number, options: QuantityFormatOptions = {}): string {
+    public static formatChipText(
+        value: number,
+        options: QuantityFormatOptions = { decimalPlaces: 2, trimTrailingZeros: true },
+    ): string {
         return this.formatQuantityText(value, this.CHIP_UNITS, {
             ...options,
-            decimalPlaces: options.decimalPlaces ?? 0,
+            decimalPlaces: options.decimalPlaces ?? 2,
             roundingMode: options.roundingMode ?? "floor",
+            trimTrailingZeros: options.trimTrailingZeros ?? true,
         });
     }
 
