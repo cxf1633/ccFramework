@@ -1,5 +1,3 @@
-import type { Node } from "cc";
-
 export enum UILayer {
     Game = "LayerGame",       // 游戏内固定 UI
     UI = "LayerUI",           // 普通全屏界面
@@ -27,13 +25,8 @@ export interface UIConfig {
     destroy?: boolean;
 }
 
-export interface UIOpenParam {
+export interface UIOpenOptions extends UIConfig {
     params?: any;
-    onBeforeRemove?: (node: Node, next: () => void, params?: any) => void;
-    onRemoved?: (node: Node, params?: any) => void;
-}
-
-export interface UIOpenOptions extends UIConfig, UIOpenParam {
 }
 
 export interface UICloseOptions {

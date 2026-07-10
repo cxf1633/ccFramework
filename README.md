@@ -68,11 +68,12 @@ Game -> UI -> PopUp -> Dialog -> Toast -> System -> Guide
 
 其中 `Dialog` 层带排队语义，同一时间只展示一个强交互弹窗；`System` 层用于等待遮罩、重连遮罩、热更新进度等阻塞交互的系统 UI。
 
-`UIManager` 会复用场景中的 UI 层级。当前项目的 `UIRoot.prefab` 使用 `UIRoot -> game/gui` 结构，`UIManager` 会优先复用该结构，避免重复创建 UI 根节点。
+`UIManager` 直接绑定场景中的 UI 层级。当前项目的 `UIRoot.prefab` 使用 `UIRoot -> game/gui` 结构；缺少预定义层节点或层顺序错误时，初始化会失败并输出错误。
 
 `UIBase` 是业务 UI 组件基类，提供：
 
-- `onInit` / `onShow` / `onHide` / `onBeforeRemove` / `onRemoved` / `onDispose` 生命周期。
+- `onInit` / `onShow` / `onHide` / `onDispose` 生命周期。
+- `present(params)`：在显示前写入参数，并在界面已显示时主动刷新 `onShow`。
 - 子节点轻量索引：`getNode(name)`。
 - 按节点名自动绑定按钮点击：按钮节点名匹配同名方法时自动注册。
 - 手动按钮绑定：`registerButtonClick` / `registerButtonClicks`。

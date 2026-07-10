@@ -66,12 +66,6 @@ export class UIBase extends Component {
     protected onDispose(): void {
         // 子类自己的销毁逻辑
     }
-    protected onBeforeRemove(params?: any): void {
-
-    }
-    protected onRemoved(params?: any): void {
-
-    }
     protected onShow(params?: any): void {
 
     }
@@ -108,6 +102,14 @@ export class UIBase extends Component {
 
     /** 键长按 */
     protected onKeyPressing(event: EventKeyboard) { }
+
+    public present(params?: any): void {
+        const wasActive = this.node.activeInHierarchy;
+        this.setShowParams(params);
+        if (wasActive) {
+            this.onShow(this.showParams);
+        }
+    }
 
     public setShowParams(params?: any): void {
         this.showParams = params;

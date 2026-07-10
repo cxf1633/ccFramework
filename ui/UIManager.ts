@@ -6,7 +6,6 @@ import {
     type UICloseOptions,
     type UIConfig,
     type UIOpenOptions,
-    type UIOpenParam,
 } from "./UIDefines";
 
 interface UIPathInfo {
@@ -19,7 +18,11 @@ interface UIState {
     key: string;
     config: Required<Pick<UIConfig, "prefab" | "layer" | "destroy">> & UIConfig;
     node: Node;
-    param: UIOpenParam;
+    params?: any;
+}
+
+interface UIPresentable {
+    present(params?: any): void;
 }
 
 interface DialogRequest {
@@ -28,7 +31,7 @@ interface DialogRequest {
     resolve: (node: Node | null) => void;
 }
 
-// 单个 UI 层的运行时容器，负责节点缓存和关闭回调。
+// 单个 UI 层的运行时容器，负责节点缓存、显示和关闭。
 class UILayerNode {
     private readonly states: Map<string, UIState> = new Map();
 
@@ -51,8 +54,7 @@ class UILayerNode {
             return this.showState(oldState);
         }
 
-        this.callComponents(state.node, "setShowParams", state.param.params);
-        state.node.active = true;
+        this.presentNode(state.node, state.params);
         state.node.setPosition(Vec3.ZERO);
         this.node.addChild(state.node);
         this.states.set(state.key, state);
@@ -63,24 +65,11 @@ class UILayerNode {
         const state = typeof target === "string" ? this.states.get(target) : this.findStateByNode(target);
         if (!state || !state.node?.isValid) return false;
 
-        const removeNext = () => {
-            const destroy = options.destroy ?? state.config.destroy;
-            if (destroy) {
-                this.states.delete(state.key);
-                state.node.destroy();
-            } else {
-                state.node.active = false;
-            }
-
-            this.callComponents(state.node, "onRemoved", state.param.params);
-            state.param.onRemoved?.(state.node, state.param.params);
-        };
-
-        this.callComponents(state.node, "onBeforeRemove", state.param.params);
-        if (state.param.onBeforeRemove) {
-            state.param.onBeforeRemove(state.node, removeNext, state.param.params);
-        } else {
-            removeNext();
+        state.node.active = false;
+        const destroy = options.destroy ?? state.config.destroy;
+        if (destroy) {
+            this.states.delete(state.key);
+            state.node.destroy();
         }
 
         return true;
@@ -94,10 +83,10 @@ class UILayerNode {
         return [...this.states.values()].filter((state) => state.node?.isValid && state.node.active).length;
     }
 
-    public show(key: string, param?: UIOpenParam): Node | null {
+    public show(key: string, params?: any): Node | null {
         const state = this.states.get(key);
         if (!state?.node?.isValid) return null;
-        if (param) state.param = param;
+        state.params = params;
         return this.showState(state);
     }
 
@@ -109,21 +98,17 @@ class UILayerNode {
     }
 
     private showState(state: UIState): Node {
-        const wasActive = state.node.activeInHierarchy;
-        this.callComponents(state.node, "setShowParams", state.param.params);
-        state.node.active = true;
         state.node.setSiblingIndex(this.node.children.length - 1);
-        if (wasActive) {
-            this.callComponents(state.node, "onShow", state.param.params);
-        }
+        this.presentNode(state.node, state.params);
         return state.node;
     }
 
-    private callComponents(node: Node, methodName: string, data: any): void {
+    private presentNode(node: Node, params?: any): void {
         for (const component of node.components) {
-            const method = (component as any)[methodName];
-            if (typeof method === "function") method.call(component, data);
+            const present = (component as Partial<UIPresentable>).present;
+            if (typeof present === "function") present.call(component, params);
         }
+        node.active = true;
     }
 }
 
@@ -350,7 +335,7 @@ export class UIManager {
         if (!layer) return null;
 
         if (layer.has(pathInfo.key)) {
-            const oldNode = layer.show(pathInfo.key, options);
+            const oldNode = layer.show(pathInfo.key, options.params);
             if (oldNode?.isValid) {
                 return oldNode;
             }
@@ -367,7 +352,7 @@ export class UIManager {
             key: pathInfo.key,
             config,
             node,
-            param: options,
+            params: options.params,
         };
 
         layer.add(state);
@@ -381,7 +366,7 @@ export class UIManager {
         if (!layer) return null;
 
         if (layer.has(pathInfo.key)) {
-            const oldNode = layer.show(pathInfo.key, options);
+            const oldNode = layer.show(pathInfo.key, options.params);
             if (oldNode?.isValid) {
                 return oldNode;
             }
@@ -398,7 +383,7 @@ export class UIManager {
             key: pathInfo.key,
             config,
             node,
-            param: options,
+            params: options.params,
         };
 
         layer.add(state);
