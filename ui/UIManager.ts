@@ -1,4 +1,4 @@
-import { Canvas, director, instantiate, Node, UITransform, Vec3, Widget } from "cc";
+import { Canvas, director, instantiate, Node, Vec3 } from "cc";
 import { ResManager } from "../res/ResManager";
 import {
     UI_LAYER_ORDER,
@@ -202,6 +202,7 @@ export class UIManager {
     private readonly layers: Map<UILayer, UILayerNode> = new Map();
     private readonly configMap: Map<string, UIConfig> = new Map();
     private readonly nodeKeyMap: WeakMap<Node, string> = new WeakMap();
+    private boundGuiNode: Node | null = null;
 
     public constructor(private readonly res: ResManager) {
     }
@@ -280,13 +281,7 @@ export class UIManager {
     public init(configs?: Record<string, UIConfig>, layerName?: UILayer): Node | null {
         this.initUIConfigs(configs);
 
-        const canvas = director.getScene()?.getComponentInChildren(Canvas);
-        if (!canvas) {
-            console.warn("[UIManager] Canvas not found.");
-            return null;
-        }
-
-        this.ensureAllLayers(canvas);
+        if (!this.ensureSceneLayers()) return null;
         return this.layers.get(layerName || UILayer.UI)?.node || null;
     }
 
@@ -521,13 +516,7 @@ export class UIManager {
     }
 
     private getLayerNode(layerName: UILayer): UILayerNode | null {
-        const canvas = director.getScene()?.getComponentInChildren(Canvas);
-        if (!canvas) {
-            console.warn("[UIManager] Canvas not found.");
-            return null;
-        }
-
-        this.ensureAllLayers(canvas);
+        if (!this.ensureSceneLayers()) return null;
         const layer = this.layers.get(layerName);
         if (!layer?.node?.isValid) {
             this.layers.delete(layerName);
@@ -537,83 +526,79 @@ export class UIManager {
         return layer;
     }
 
-    private ensureAllLayers(canvas: Canvas): void {
-        const guiRoot = this.ensureUIHierarchy(canvas);
-        this.layerOrder.forEach((layerName, index) => {
-            const node = this.getOrCreateChild(guiRoot, layerName);
-            setupFullScreenNode(node, guiRoot);
-            node.setSiblingIndex(index + 1);
+    private ensureSceneLayers(): boolean {
+        const scene = director.getScene();
+        const canvas = scene
+            ?.getComponentsInChildren(Canvas)
+            .find((component) => component.node.name === "gui");
+        const guiNode = canvas?.node || null;
 
-            const cachedLayer = this.layers.get(layerName);
-            if (!cachedLayer || !cachedLayer.node?.isValid || cachedLayer.node !== node) {
-                const layer = layerName === UILayer.Dialog ? new UIDialogLayerNode(layerName, node) : new UILayerNode(layerName, node);
-                this.layers.set(layerName, layer);
-            }
+        if (!guiNode?.isValid) {
+            this.clearLayerBindings();
+            console.warn("[UIManager] gui Canvas not found in the current scene.");
+            return false;
+        }
+
+        if (this.hasValidLayerBindings(guiNode)) return true;
+        return this.bindSceneLayers(guiNode);
+    }
+
+    private hasValidLayerBindings(guiNode: Node): boolean {
+        if (this.boundGuiNode !== guiNode || this.layers.size !== this.layerOrder.length) return false;
+
+        return this.layerOrder.every((layerName) => {
+            const layer = this.layers.get(layerName);
+            return !!layer?.node?.isValid
+                && layer.node.parent === guiNode
+                && guiNode.getChildByName(layerName) === layer.node;
         });
     }
 
-    private ensureUIHierarchy(canvas: Canvas): Node {
-        // 兼容旧项目里 Canvas 节点本身就是 gui 的结构。
-        if (canvas.node.name === "gui" && canvas.node.parent?.getChildByName("game")) {
-            const uiCamera = this.getOrCreateChild(canvas.node, "UICamera");
-            uiCamera.setSiblingIndex(0);
-            return canvas.node;
+    private bindSceneLayers(guiNode: Node): boolean {
+        const layerNodes = new Map<UILayer, Node>();
+        const missingLayers: UILayer[] = [];
+
+        this.layerOrder.forEach((layerName) => {
+            const node = guiNode.getChildByName(layerName);
+            if (node?.isValid) {
+                layerNodes.set(layerName, node);
+            } else {
+                missingLayers.push(layerName);
+            }
+        });
+
+        if (missingLayers.length > 0) {
+            this.clearLayerBindings();
+            console.error(`[UIManager] Missing UI layers under gui: ${missingLayers.join(", ")}`);
+            return false;
         }
 
-        const uiRoot = this.getOrCreateChild(canvas.node, "UIRoot");
-        setupFullScreenNode(uiRoot, canvas.node);
-
-        const root = this.getOrCreateChild(uiRoot, "root");
-        setupFullScreenNode(root, uiRoot);
-
-        const game = this.getOrCreateChild(root, "game");
-        setupFullScreenNode(game, root);
-        game.setSiblingIndex(0);
-
-        const gui = this.getOrCreateChild(root, "gui");
-        setupFullScreenNode(gui, root);
-        gui.setSiblingIndex(1);
-
-        const uiCamera = this.getOrCreateChild(gui, "UICamera");
-        setupFullScreenNode(uiCamera, gui);
-        uiCamera.setSiblingIndex(0);
-
-        return gui;
-    }
-
-    private getOrCreateChild(parent: Node, name: string): Node {
-        let child = parent.getChildByName(name);
-        if (!child) {
-            child = new Node(name);
-            parent.addChild(child);
+        let previousSiblingIndex = -1;
+        for (const layerName of this.layerOrder) {
+            const siblingIndex = layerNodes.get(layerName)!.getSiblingIndex();
+            if (siblingIndex <= previousSiblingIndex) {
+                this.clearLayerBindings();
+                console.error(`[UIManager] Invalid UI layer order. Expected: ${this.layerOrder.join(" -> ")}`);
+                return false;
+            }
+            previousSiblingIndex = siblingIndex;
         }
-        return child;
-    }
-}
 
-// 设置节点为跟随父节点尺寸的全屏 UI 节点。
-function setupFullScreenNode(node: Node, parent: Node): void {
-    node.layer = parent.layer;
-    node.setPosition(Vec3.ZERO);
+        this.layers.clear();
+        this.boundGuiNode = guiNode;
+        this.layerOrder.forEach((layerName) => {
+            const node = layerNodes.get(layerName)!;
+            const layer = layerName === UILayer.Dialog
+                ? new UIDialogLayerNode(layerName, node)
+                : new UILayerNode(layerName, node);
+            this.layers.set(layerName, layer);
+        });
 
-    const parentTransform = parent.getComponent(UITransform);
-    let transform = node.getComponent(UITransform);
-    if (!transform) transform = node.addComponent(UITransform);
-    if (parentTransform) {
-        transform.setContentSize(parentTransform.contentSize);
-        transform.setAnchorPoint(parentTransform.anchorPoint);
+        return true;
     }
 
-    let widget = node.getComponent(Widget);
-    if (!widget) widget = node.addComponent(Widget);
-    widget.isAlignLeft = true;
-    widget.isAlignRight = true;
-    widget.isAlignTop = true;
-    widget.isAlignBottom = true;
-    widget.left = 0;
-    widget.right = 0;
-    widget.top = 0;
-    widget.bottom = 0;
-    widget.alignMode = Widget.AlignMode.ALWAYS;
-    widget.updateAlignment();
+    private clearLayerBindings(): void {
+        this.boundGuiNode = null;
+        this.layers.clear();
+    }
 }
