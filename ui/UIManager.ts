@@ -5,20 +5,14 @@ import {
     UILayer,
     type UICloseOptions,
     type UIConfig,
-    type UIOpenOptions,
 } from "./UIDefines";
 
-interface UIPathInfo {
-    bundleName: string;
-    prefabPath: string;
-    key: string;
-}
+type ResolvedUIConfig = Required<Pick<UIConfig, "bundle" | "prefab" | "layer" | "destroy">> & UIConfig;
 
 interface UIState {
-    key: string;
-    config: Required<Pick<UIConfig, "prefab" | "layer" | "destroy">> & UIConfig;
+    id: string;
+    config: ResolvedUIConfig;
     node: Node;
-    params?: any;
 }
 
 interface UIPresentable {
@@ -26,93 +20,13 @@ interface UIPresentable {
 }
 
 interface DialogRequest {
-    pathInfo: UIPathInfo;
-    options: UIOpenOptions;
+    id: string;
+    config: ResolvedUIConfig;
+    params?: any;
     resolve: (node: Node | null) => void;
 }
 
-// 单个 UI 层的运行时容器，负责节点缓存、显示和关闭。
-class UILayerNode {
-    private readonly states: Map<string, UIState> = new Map();
-
-    public constructor(
-        public readonly name: UILayer,
-        public readonly node: Node,
-    ) { }
-
-    public has(key: string): boolean {
-        return this.states.has(key);
-    }
-
-    public get(key: string): Node | null {
-        return this.states.get(key)?.node || null;
-    }
-
-    public add(state: UIState): Node {
-        const oldState = this.states.get(state.key);
-        if (oldState?.node?.isValid) {
-            return this.showState(oldState);
-        }
-
-        this.presentNode(state.node, state.params);
-        state.node.setPosition(Vec3.ZERO);
-        this.node.addChild(state.node);
-        this.states.set(state.key, state);
-        return state.node;
-    }
-
-    public remove(target: string | Node, options: UICloseOptions = {}): boolean {
-        const state = typeof target === "string" ? this.states.get(target) : this.findStateByNode(target);
-        if (!state || !state.node?.isValid) return false;
-
-        state.node.active = false;
-        const destroy = options.destroy ?? state.config.destroy;
-        if (destroy) {
-            this.states.delete(state.key);
-            state.node.destroy();
-        }
-
-        return true;
-    }
-
-    public clear(options: UICloseOptions = {}): void {
-        [...this.states.keys()].forEach((key) => this.remove(key, options));
-    }
-
-    public stateCount(): number {
-        return [...this.states.values()].filter((state) => state.node?.isValid && state.node.active).length;
-    }
-
-    public show(key: string, params?: any): Node | null {
-        const state = this.states.get(key);
-        if (!state?.node?.isValid) return null;
-        state.params = params;
-        return this.showState(state);
-    }
-
-    private findStateByNode(node: Node): UIState | null {
-        for (const state of this.states.values()) {
-            if (state.node === node) return state;
-        }
-        return null;
-    }
-
-    private showState(state: UIState): Node {
-        state.node.setSiblingIndex(this.node.children.length - 1);
-        this.presentNode(state.node, state.params);
-        return state.node;
-    }
-
-    private presentNode(node: Node, params?: any): void {
-        for (const component of node.components) {
-            const present = (component as Partial<UIPresentable>).present;
-            if (typeof present === "function") present.call(component, params);
-        }
-        node.active = true;
-    }
-}
-
-// Dialog requests are serialized independently from layer node storage.
+// Dialog requests are serialized independently from UI instance storage.
 class UIDialogQueue {
     private readonly queue: DialogRequest[] = [];
     private opening = false;
@@ -160,7 +74,7 @@ class UIDialogQueue {
         try {
             node = await this.openNow(request);
         } catch (err) {
-            console.warn(`[UIManager] Open dialog failed: ${request.pathInfo.key}`, err);
+            console.warn(`[UIManager] Open dialog failed: ${request.id}`, err);
         } finally {
             this.opening = false;
         }
@@ -178,63 +92,37 @@ export class UIManager {
     // 越靠后的层 siblingIndex 越高。
     private readonly layerOrder = UI_LAYER_ORDER;
 
-    private readonly layers: Map<UILayer, UILayerNode> = new Map();
+    private readonly layerNodes: Map<UILayer, Node> = new Map();
+    private readonly instances: Map<string, UIState> = new Map();
     private readonly configMap: Map<string, UIConfig> = new Map();
-    private readonly nodeKeyMap: WeakMap<Node, string> = new WeakMap();
+    private readonly nodeIdMap: WeakMap<Node, string> = new WeakMap();
     private readonly dialogQueue: UIDialogQueue;
     private boundGuiNode: Node | null = null;
 
     public constructor(private readonly res: ResManager) {
         this.dialogQueue = new UIDialogQueue(
-            (request) => this.openNow(request.pathInfo, request.options),
-            () => (this.layers.get(UILayer.Dialog)?.stateCount() || 0) > 0,
+            (request) => this.openNow(request.id, request.config, request.params),
+            () => this.hasActiveInstanceInLayer(UILayer.Dialog),
         );
     }
 
-    // public async open(path: string, options?: UIOpenOptions): Promise<Node | null>;
-    // public async open(bundleName: string, prefabPath: string, options?: UIOpenOptions): Promise<Node | null>;
-    // public async open(bundleNameOrPath: string, prefabPathOrOptions?: string | UIOpenOptions, options?: UIOpenOptions): Promise<Node | null> {
-    //     const pathInfo = this.parsePath(bundleNameOrPath, prefabPathOrOptions);
-    //     if (!pathInfo) {
-    //         console.warn(`[UIManager] Invalid ui path: ${bundleNameOrPath}`);
-    //         return null;
-    //     }
-
-    //     const openOptions = this.resolveOpenOptions(pathInfo, prefabPathOrOptions, options);
-    //     return this.openResolved(pathInfo, openOptions);
-    // }
-
     // 通过已注册的 UIID 打开界面。UIID 本身属于 app 层，UIManager 只接收字符串 key。
     public async openById(uiid: string, params?: any): Promise<Node | null> {
-        const config = this.getRegisteredConfig(uiid);
+        const config = this.getResolvedConfig(uiid);
         if (!config) return null;
-
-        const openOptions: UIOpenOptions = { ...config, params };
-        const pathInfo = this.parseConfig(uiid, openOptions);
-        if (!pathInfo) return null;
-
-        return this.openResolved(pathInfo, openOptions);
+        return this.openResolved(uiid, config, params);
     }
 
     public openPreloadedById(uiid: string, params?: any): Node | null {
-        const config = this.getRegisteredConfig(uiid);
+        const config = this.getResolvedConfig(uiid);
         if (!config) return null;
-
-        const openOptions: UIOpenOptions = { ...config, params };
-        const pathInfo = this.parseConfig(uiid, openOptions);
-        if (!pathInfo) return null;
-
-        return this.openPreloadedResolved(pathInfo, openOptions);
+        return this.openPreloadedResolved(uiid, config, params);
     }
 
     public async preloadById(uiid: string): Promise<boolean> {
-        const config = this.getRegisteredConfig(uiid);
+        const config = this.getResolvedConfig(uiid);
         if (!config) return false;
-
-        const pathInfo = this.parseConfig(uiid, config);
-        if (!pathInfo) return false;
-
-        return await this.res.preloadPrefabFromBundle(pathInfo.bundleName, pathInfo.prefabPath);
+        return await this.res.preloadPrefabFromBundle(config.bundle, config.prefab);
     }
 
     public async preloadByIds(uiids: readonly string[]): Promise<void> {
@@ -242,9 +130,8 @@ export class UIManager {
     }
 
     public closeById(uiid: string, options: UICloseOptions = {}): boolean {
-        const pathInfo = this.parseConfig(uiid, this.getRegisteredConfig(uiid));
-        if (!pathInfo) return false;
-        return this.removeFromLayers(pathInfo.key, options);
+        if (!this.getRegisteredConfig(uiid)) return false;
+        return this.removeInstance(uiid, options);
     }
 
     public hasById(uiid: string): boolean {
@@ -252,9 +139,8 @@ export class UIManager {
     }
 
     public getById(uiid: string): Node | null {
-        const pathInfo = this.parseConfig(uiid, this.getRegisteredConfig(uiid));
-        if (!pathInfo) return null;
-        return this.get(pathInfo.key);
+        if (!this.getRegisteredConfig(uiid)) return null;
+        return this.get(uiid);
     }
 
     public create(bundleName: string, prefabPath: string): Promise<Node | null> {
@@ -266,134 +152,119 @@ export class UIManager {
         this.initUIConfigs(configs);
 
         if (!this.ensureSceneLayers()) return null;
-        return this.layers.get(layerName || UILayer.UI)?.node || null;
+        return this.layerNodes.get(layerName || UILayer.UI) || null;
     }
 
     public close(target: string | Node, options: UICloseOptions = {}): boolean {
         if (target instanceof Node) {
-            const key = this.nodeKeyMap.get(target);
-            return this.removeFromLayers(key || target, options);
+            const uiid = this.nodeIdMap.get(target);
+            if (!uiid) return false;
+            const state = this.getInstance(uiid);
+            if (!state || state.node !== target) return false;
+            return this.removeInstance(uiid, options);
         }
 
-        const pathInfo = this.parsePath(target);
-        return this.removeFromLayers(pathInfo?.key || target, options);
+        return this.removeInstance(target, options);
     }
 
     public closeAll(layerName?: UILayer, options: UICloseOptions = {}): void {
-        if (layerName) {
-            const layer = this.getLayerNode(layerName);
-            layer?.clear(options);
-            if (layerName === UILayer.Dialog) {
-                this.dialogQueue.onLayerStateChanged();
-            }
-            return;
-        }
+        const ids = [...this.instances.values()]
+            .filter((state) => !layerName || state.config.layer === layerName)
+            .map((state) => state.id);
+        ids.forEach((uiid) => this.removeInstance(uiid, options));
 
-        this.layers.forEach((layer) => layer.clear(options));
-        this.dialogQueue.onLayerStateChanged();
+        if (!layerName || layerName === UILayer.Dialog) {
+            this.dialogQueue.onLayerStateChanged();
+        }
     }
 
     public get(target: string): Node | null {
-        const key = this.parsePath(target)?.key || target;
-        for (const layer of this.layers.values()) {
-            const node = layer.get(key);
-            if (node) return node;
-        }
-        return null;
+        return this.getInstance(target)?.node || null;
     }
 
     public has(target: string): boolean {
         return !!this.get(target);
     }
 
-    private openResolved(pathInfo: UIPathInfo, openOptions: UIOpenOptions): Promise<Node | null> {
-        const layerName = openOptions.layer || UILayer.PopUp;
-        const layer = this.getLayerNode(layerName);
-        if (!layer) return Promise.resolve(null);
+    private openResolved(uiid: string, config: ResolvedUIConfig, params?: any): Promise<Node | null> {
+        if (!this.getLayerNode(config.layer)) return Promise.resolve(null);
 
         // Dialog requests are queued; other layers open immediately.
-        if (layerName === UILayer.Dialog) {
+        if (config.layer === UILayer.Dialog) {
             return new Promise<Node | null>((resolve) => {
-                this.dialogQueue.enqueue({ pathInfo, options: openOptions, resolve });
+                this.dialogQueue.enqueue({ id: uiid, config, params, resolve });
             });
         }
 
-        return this.openNow(pathInfo, openOptions);
+        return this.openNow(uiid, config, params);
     }
 
-    private openPreloadedResolved(pathInfo: UIPathInfo, openOptions: UIOpenOptions): Node | null {
-        const layerName = openOptions.layer || UILayer.PopUp;
-        const layer = this.getLayerNode(layerName);
-        if (!layer) return null;
+    private openPreloadedResolved(uiid: string, config: ResolvedUIConfig, params?: any): Node | null {
+        if (!this.getLayerNode(config.layer)) return null;
 
-        if (layerName === UILayer.Dialog && this.dialogQueue.isBusy()) {
-            console.warn(`[UIManager] Cannot open preloaded dialog while busy: ${pathInfo.key}`);
+        if (config.layer === UILayer.Dialog && this.dialogQueue.isBusy()) {
+            console.warn(`[UIManager] Cannot open preloaded dialog while busy: ${uiid}`);
             return null;
         }
 
-        return this.openPreloadedNow(pathInfo, openOptions);
+        return this.openPreloadedNow(uiid, config, params);
     }
 
-    private async openNow(pathInfo: UIPathInfo, options: UIOpenOptions): Promise<Node | null> {
-        const layer = this.getLayerNode(options.layer || UILayer.PopUp);
-        if (!layer) return null;
+    private async openNow(uiid: string, config: ResolvedUIConfig, params?: any): Promise<Node | null> {
+        const oldState = this.getInstance(uiid);
+        if (oldState) {
+            const oldNode = this.showInstance(oldState, params);
+            if (oldNode) return oldNode;
+        }
 
-        if (layer.has(pathInfo.key)) {
-            const oldNode = layer.show(pathInfo.key, options.params);
-            if (oldNode?.isValid) {
+        const node = await this.createNode(config.bundle, config.prefab);
+        if (!node || !node.isValid) {
+            console.warn(`[UIManager] Open ui failed: ${uiid} (${config.bundle}/${config.prefab}).`);
+            return null;
+        }
+
+        const layerNode = this.getLayerNode(config.layer);
+        if (!layerNode) {
+            node.destroy();
+            return null;
+        }
+
+        const stateAfterLoad = this.getInstance(uiid);
+        if (stateAfterLoad) {
+            const oldNode = this.showInstance(stateAfterLoad, params);
+            if (oldNode) {
+                node.destroy();
                 return oldNode;
             }
         }
 
-        const node = await this.createNode(pathInfo.bundleName, pathInfo.prefabPath);
-        if (!node || !node.isValid) {
-            console.warn(`[UIManager] Open ui failed: ${pathInfo.key}.`);
-            return null;
-        }
-
-        const config = this.initConfig(pathInfo, options);
-        const state: UIState = {
-            key: pathInfo.key,
-            config,
-            node,
-            params: options.params,
-        };
-
-        layer.add(state);
-        this.nodeKeyMap.set(node, pathInfo.key);
-        console.log(`[UIManager] Open ui success: ${pathInfo.key} -> ${config.layer}`);
-        return node;
+        const mountedNode = this.mountInstance(uiid, config, node, params, layerNode);
+        console.log(`[UIManager] Open ui success: ${uiid} (${config.bundle}/${config.prefab}) -> ${config.layer}`);
+        return mountedNode;
     }
 
-    private openPreloadedNow(pathInfo: UIPathInfo, options: UIOpenOptions): Node | null {
-        const layer = this.getLayerNode(options.layer || UILayer.PopUp);
-        if (!layer) return null;
-
-        if (layer.has(pathInfo.key)) {
-            const oldNode = layer.show(pathInfo.key, options.params);
-            if (oldNode?.isValid) {
-                return oldNode;
-            }
+    private openPreloadedNow(uiid: string, config: ResolvedUIConfig, params?: any): Node | null {
+        const oldState = this.getInstance(uiid);
+        if (oldState) {
+            const oldNode = this.showInstance(oldState, params);
+            if (oldNode) return oldNode;
         }
 
-        const node = this.createPreloadedNode(pathInfo.bundleName, pathInfo.prefabPath);
+        const node = this.createPreloadedNode(config.bundle, config.prefab);
         if (!node || !node.isValid) {
-            console.error(`[UIManager] Preloaded ui missing: ${pathInfo.key}.`);
+            console.error(`[UIManager] Preloaded ui missing: ${uiid} (${config.bundle}/${config.prefab}).`);
             return null;
         }
 
-        const config = this.initConfig(pathInfo, options);
-        const state: UIState = {
-            key: pathInfo.key,
-            config,
-            node,
-            params: options.params,
-        };
+        const layerNode = this.getLayerNode(config.layer);
+        if (!layerNode) {
+            node.destroy();
+            return null;
+        }
 
-        layer.add(state);
-        this.nodeKeyMap.set(node, pathInfo.key);
-        console.log(`[UIManager] Open preloaded ui success: ${pathInfo.key} -> ${config.layer}`);
-        return node;
+        const mountedNode = this.mountInstance(uiid, config, node, params, layerNode);
+        console.log(`[UIManager] Open preloaded ui success: ${uiid} (${config.bundle}/${config.prefab}) -> ${config.layer}`);
+        return mountedNode;
     }
 
     private async createNode(bundleName: string, prefabPath: string): Promise<Node | null> {
@@ -422,13 +293,82 @@ export class UIManager {
         return instantiate(prefab);
     }
 
-    private removeFromLayers(target: string | Node, options: UICloseOptions): boolean {
-        for (const layer of this.layers.values()) {
-            if (!layer.remove(target, options)) continue;
-            if (layer.name === UILayer.Dialog) {
+    private mountInstance(
+        uiid: string,
+        config: ResolvedUIConfig,
+        node: Node,
+        params: any,
+        layerNode: Node,
+    ): Node {
+        const state: UIState = { id: uiid, config, node };
+        this.presentNode(node, params);
+        node.setPosition(Vec3.ZERO);
+        this.instances.set(uiid, state);
+        this.nodeIdMap.set(node, uiid);
+        layerNode.addChild(node);
+        return node;
+    }
+
+    private showInstance(state: UIState, params?: any): Node | null {
+        const layerNode = this.getLayerNode(state.config.layer);
+        if (!layerNode || state.node.parent !== layerNode) {
+            this.instances.delete(state.id);
+            if (state.node.isValid) state.node.destroy();
+            if (state.config.layer === UILayer.Dialog) {
                 this.dialogQueue.onLayerStateChanged();
             }
-            return true;
+            return null;
+        }
+
+        state.node.setSiblingIndex(layerNode.children.length - 1);
+        this.presentNode(state.node, params);
+        return state.node;
+    }
+
+    private presentNode(node: Node, params?: any): void {
+        for (const component of node.components) {
+            const present = (component as Partial<UIPresentable>).present;
+            if (typeof present === "function") present.call(component, params);
+        }
+        node.active = true;
+    }
+
+    private getInstance(uiid: string): UIState | null {
+        const state = this.instances.get(uiid);
+        if (!state) return null;
+        if (state.node?.isValid) return state;
+
+        this.instances.delete(uiid);
+        if (state.config.layer === UILayer.Dialog) {
+            this.dialogQueue.onLayerStateChanged();
+        }
+        return null;
+    }
+
+    private removeInstance(uiid: string, options: UICloseOptions): boolean {
+        const state = this.getInstance(uiid);
+        if (!state) return false;
+
+        state.node.active = false;
+        const destroy = options.destroy ?? state.config.destroy;
+        if (destroy) {
+            this.instances.delete(uiid);
+            state.node.destroy();
+        }
+
+        if (state.config.layer === UILayer.Dialog) {
+            this.dialogQueue.onLayerStateChanged();
+        }
+        return true;
+    }
+
+    private hasActiveInstanceInLayer(layerName: UILayer): boolean {
+        for (const [uiid, state] of this.instances) {
+            if (!state.node?.isValid) {
+                this.instances.delete(uiid);
+                continue;
+            }
+            if (state.config.layer === layerName && state.node.active) return true;
         }
         return false;
     }
@@ -441,29 +381,8 @@ export class UIManager {
         }
     }
 
-    private parsePath(bundleNameOrPath: string, prefabPathOrOptions?: string | UIOpenOptions): UIPathInfo | null {
-        if (typeof prefabPathOrOptions === "string") {
-            return {
-                bundleName: bundleNameOrPath,
-                prefabPath: prefabPathOrOptions,
-                key: `${bundleNameOrPath}/${prefabPathOrOptions}`,
-            };
-        }
-
-        const path = bundleNameOrPath.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
-        const segments = path.split("/");
-        if (segments.length < 2) return null;
-
-        const bundleName = segments.shift()!;
-        const prefabPath = segments.join("/");
-        return {
-            bundleName,
-            prefabPath,
-            key: `${bundleName}/${prefabPath}`,
-        };
-    }
-
-    private parseConfig(uiid: string, config: UIConfig | null): UIPathInfo | null {
+    private getResolvedConfig(uiid: string): ResolvedUIConfig | null {
+        const config = this.getRegisteredConfig(uiid);
         if (!config) return null;
         if (!config.bundle || !config.prefab) {
             console.warn(`[UIManager] Invalid UI config: ${uiid}`);
@@ -471,31 +390,11 @@ export class UIManager {
         }
 
         return {
-            bundleName: config.bundle,
-            prefabPath: config.prefab,
-            key: `${config.bundle}/${config.prefab}`,
-        };
-    }
-
-    // private resolveOpenOptions(pathInfo: UIPathInfo, prefabPathOrOptions?: string | UIOpenOptions, options?: UIOpenOptions): UIOpenOptions {
-    //     const inlineOptions = typeof prefabPathOrOptions === "object" ? prefabPathOrOptions : options;
-    //     const registered = this.configMap.get(pathInfo.key) || this.configMap.get(pathInfo.prefabPath);
-    //     return {
-    //         ...registered,
-    //         ...inlineOptions,
-    //         bundle: inlineOptions?.bundle || registered?.bundle || pathInfo.bundleName,
-    //         prefab: inlineOptions?.prefab || registered?.prefab || pathInfo.prefabPath,
-    //     };
-    // }
-
-    // 补齐一次打开请求的默认配置。
-    private initConfig(pathInfo: UIPathInfo, options: UIOpenOptions): UIState["config"] {
-        return {
-            ...options,
-            bundle: options.bundle || pathInfo.bundleName,
-            prefab: options.prefab || pathInfo.prefabPath,
-            layer: options.layer || UILayer.PopUp,
-            destroy: options.destroy ?? true,
+            ...config,
+            bundle: config.bundle,
+            prefab: config.prefab,
+            layer: config.layer || UILayer.PopUp,
+            destroy: config.destroy ?? true,
         };
     }
 
@@ -508,15 +407,15 @@ export class UIManager {
         return config;
     }
 
-    private getLayerNode(layerName: UILayer): UILayerNode | null {
+    private getLayerNode(layerName: UILayer): Node | null {
         if (!this.ensureSceneLayers()) return null;
-        const layer = this.layers.get(layerName);
-        if (!layer?.node?.isValid) {
-            this.layers.delete(layerName);
+        const node = this.layerNodes.get(layerName);
+        if (!node?.isValid) {
+            this.layerNodes.delete(layerName);
             return null;
         }
 
-        return layer;
+        return node;
     }
 
     private ensureSceneLayers(): boolean {
@@ -537,24 +436,24 @@ export class UIManager {
     }
 
     private hasValidLayerBindings(guiNode: Node): boolean {
-        if (this.boundGuiNode !== guiNode || this.layers.size !== this.layerOrder.length) return false;
+        if (this.boundGuiNode !== guiNode || this.layerNodes.size !== this.layerOrder.length) return false;
 
         return this.layerOrder.every((layerName) => {
-            const layer = this.layers.get(layerName);
-            return !!layer?.node?.isValid
-                && layer.node.parent === guiNode
-                && guiNode.getChildByName(layerName) === layer.node;
+            const node = this.layerNodes.get(layerName);
+            return !!node?.isValid
+                && node.parent === guiNode
+                && guiNode.getChildByName(layerName) === node;
         });
     }
 
     private bindSceneLayers(guiNode: Node): boolean {
-        const layerNodes = new Map<UILayer, Node>();
+        const resolvedLayerNodes = new Map<UILayer, Node>();
         const missingLayers: UILayer[] = [];
 
         this.layerOrder.forEach((layerName) => {
             const node = guiNode.getChildByName(layerName);
             if (node?.isValid) {
-                layerNodes.set(layerName, node);
+                resolvedLayerNodes.set(layerName, node);
             } else {
                 missingLayers.push(layerName);
             }
@@ -568,7 +467,7 @@ export class UIManager {
 
         let previousSiblingIndex = -1;
         for (const layerName of this.layerOrder) {
-            const siblingIndex = layerNodes.get(layerName)!.getSiblingIndex();
+            const siblingIndex = resolvedLayerNodes.get(layerName)!.getSiblingIndex();
             if (siblingIndex <= previousSiblingIndex) {
                 this.clearLayerBindings();
                 console.error(`[UIManager] Invalid UI layer order. Expected: ${this.layerOrder.join(" -> ")}`);
@@ -577,11 +476,16 @@ export class UIManager {
             previousSiblingIndex = siblingIndex;
         }
 
-        this.layers.clear();
+        for (const [uiid, state] of this.instances) {
+            const layerNode = resolvedLayerNodes.get(state.config.layer);
+            if (!state.node?.isValid || state.node.parent !== layerNode) {
+                this.instances.delete(uiid);
+            }
+        }
+        this.layerNodes.clear();
         this.boundGuiNode = guiNode;
         this.layerOrder.forEach((layerName) => {
-            const node = layerNodes.get(layerName)!;
-            this.layers.set(layerName, new UILayerNode(layerName, node));
+            this.layerNodes.set(layerName, resolvedLayerNodes.get(layerName)!);
         });
         this.dialogQueue.onLayerStateChanged();
 
@@ -590,6 +494,7 @@ export class UIManager {
 
     private clearLayerBindings(): void {
         this.boundGuiNode = null;
-        this.layers.clear();
+        this.layerNodes.clear();
+        this.instances.clear();
     }
 }

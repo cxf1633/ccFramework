@@ -60,6 +60,8 @@ await Framework.UIMgr.openById(UIID.HoldemMain, params);
 Framework.UIMgr.closeById(UIID.HoldemMain);
 ```
 
+运行时实例以注册 UIID 为唯一身份；层级只决定父节点和渲染顺序，不参与实例查找。同一 Prefab 注册为不同 UIID 时会得到相互独立的实例。
+
 UI 层级从低到高为：
 
 ```text
