@@ -7,7 +7,7 @@ import {
     type UIConfig,
 } from "./UIDefines";
 
-type ResolvedUIConfig = Required<Pick<UIConfig, "bundle" | "prefab" | "layer" | "destroy">> & UIConfig;
+type ResolvedUIConfig = UIConfig & Required<Pick<UIConfig, "destroy">>;
 
 interface UIState {
     id: string;
@@ -437,16 +437,13 @@ export class UIManager {
     private getResolvedConfig(uiid: string): ResolvedUIConfig | null {
         const config = this.getRegisteredConfig(uiid);
         if (!config) return null;
-        if (!config.bundle || !config.prefab) {
+        if (!config.bundle || !config.prefab || !config.layer) {
             console.warn(`[UIManager] Invalid UI config: ${uiid}`);
             return null;
         }
 
         return {
             ...config,
-            bundle: config.bundle,
-            prefab: config.prefab,
-            layer: config.layer || UILayer.PopUp,
             destroy: config.destroy ?? true,
         };
     }

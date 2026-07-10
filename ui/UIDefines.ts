@@ -19,14 +19,10 @@ export const UI_LAYER_ORDER: readonly UILayer[] = [
 ];
 
 export interface UIConfig {
-    bundle?: string;
-    prefab?: string;
-    layer?: UILayer;
+    bundle: string;
+    prefab: string;
+    layer: UILayer;
     destroy?: boolean;
-}
-
-export interface UIOpenOptions extends UIConfig {
-    params?: any;
 }
 
 export interface UICloseOptions {
