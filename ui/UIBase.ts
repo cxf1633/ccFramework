@@ -44,7 +44,6 @@ export class UIBase extends Component {
     }
 
     protected onDestroy(): void {
-        this.onDisable();
         this.onDispose();
         this.stopAllNodeMoveTweens();
         this.clearButtonBindings();
