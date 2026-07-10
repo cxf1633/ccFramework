@@ -112,55 +112,49 @@ class UILayerNode {
     }
 }
 
-// Dialog 层同一时间只展示一个窗口，后续请求排队等待当前窗口关闭。
-class UIDialogLayerNode extends UILayerNode {
+// Dialog requests are serialized independently from layer node storage.
+class UIDialogQueue {
     private readonly queue: DialogRequest[] = [];
-    private currentKey: string | null = null;
     private opening = false;
-    private openNow: ((request: DialogRequest) => Promise<Node | null>) | null = null;
+    private nextScheduled = false;
 
-    public enqueue(request: DialogRequest, openNow: (request: DialogRequest) => Promise<Node | null>): void {
-        this.openNow = openNow;
-        if (this.opening || this.currentKey || this.stateCount() > 0) {
-            this.queue.push(request);
-            return;
-        }
+    public constructor(
+        private readonly openNow: (request: DialogRequest) => Promise<Node | null>,
+        private readonly hasActiveDialog: () => boolean,
+    ) { }
 
-        this.openRequest(request);
-    }
-
-    public override add(state: UIState): Node {
-        this.currentKey = state.key;
-        return super.add(state);
+    public enqueue(request: DialogRequest): void {
+        this.queue.push(request);
+        this.next();
     }
 
     public isBusy(): boolean {
-        return this.opening || !!this.currentKey || this.stateCount() > 0;
+        return this.opening || this.hasActiveDialog() || this.queue.length > 0;
     }
 
-    public override remove(target: string | Node, options: UICloseOptions = {}): boolean {
-        const removed = super.remove(target, options);
-        if (removed) {
-            this.currentKey = null;
-            setTimeout(() => this.next(), 0);
-        }
-        return removed;
+    public onLayerStateChanged(): void {
+        this.scheduleNext();
     }
 
     private next(): void {
-        if (this.opening || this.currentKey || this.stateCount() > 0) return;
+        if (this.opening || this.hasActiveDialog()) return;
 
         const request = this.queue.shift();
         if (!request) return;
-        this.openRequest(request);
+        void this.openRequest(request);
+    }
+
+    private scheduleNext(): void {
+        if (this.nextScheduled) return;
+
+        this.nextScheduled = true;
+        setTimeout(() => {
+            this.nextScheduled = false;
+            this.next();
+        }, 0);
     }
 
     private async openRequest(request: DialogRequest): Promise<void> {
-        if (!this.openNow) {
-            request.resolve(null);
-            return;
-        }
-
         this.opening = true;
         let node: Node | null = null;
         try {
@@ -173,8 +167,8 @@ class UIDialogLayerNode extends UILayerNode {
 
         request.resolve(node);
 
-        if (!node) {
-            setTimeout(() => this.next(), 0);
+        if (!node?.isValid || !this.hasActiveDialog()) {
+            this.scheduleNext();
         }
     }
 }
@@ -187,9 +181,14 @@ export class UIManager {
     private readonly layers: Map<UILayer, UILayerNode> = new Map();
     private readonly configMap: Map<string, UIConfig> = new Map();
     private readonly nodeKeyMap: WeakMap<Node, string> = new WeakMap();
+    private readonly dialogQueue: UIDialogQueue;
     private boundGuiNode: Node | null = null;
 
     public constructor(private readonly res: ResManager) {
+        this.dialogQueue = new UIDialogQueue(
+            (request) => this.openNow(request.pathInfo, request.options),
+            () => (this.layers.get(UILayer.Dialog)?.stateCount() || 0) > 0,
+        );
     }
 
     // public async open(path: string, options?: UIOpenOptions): Promise<Node | null>;
@@ -282,11 +281,16 @@ export class UIManager {
 
     public closeAll(layerName?: UILayer, options: UICloseOptions = {}): void {
         if (layerName) {
-            this.getLayerNode(layerName)?.clear(options);
+            const layer = this.getLayerNode(layerName);
+            layer?.clear(options);
+            if (layerName === UILayer.Dialog) {
+                this.dialogQueue.onLayerStateChanged();
+            }
             return;
         }
 
         this.layers.forEach((layer) => layer.clear(options));
+        this.dialogQueue.onLayerStateChanged();
     }
 
     public get(target: string): Node | null {
@@ -307,10 +311,10 @@ export class UIManager {
         const layer = this.getLayerNode(layerName);
         if (!layer) return Promise.resolve(null);
 
-        // Dialog 层有排队语义，其他层直接打开。
-        if (layer instanceof UIDialogLayerNode) {
+        // Dialog requests are queued; other layers open immediately.
+        if (layerName === UILayer.Dialog) {
             return new Promise<Node | null>((resolve) => {
-                layer.enqueue({ pathInfo, options: openOptions, resolve }, (request) => this.openNow(request.pathInfo, request.options));
+                this.dialogQueue.enqueue({ pathInfo, options: openOptions, resolve });
             });
         }
 
@@ -322,7 +326,7 @@ export class UIManager {
         const layer = this.getLayerNode(layerName);
         if (!layer) return null;
 
-        if (layer instanceof UIDialogLayerNode && layer.isBusy()) {
+        if (layerName === UILayer.Dialog && this.dialogQueue.isBusy()) {
             console.warn(`[UIManager] Cannot open preloaded dialog while busy: ${pathInfo.key}`);
             return null;
         }
@@ -420,7 +424,11 @@ export class UIManager {
 
     private removeFromLayers(target: string | Node, options: UICloseOptions): boolean {
         for (const layer of this.layers.values()) {
-            if (layer.remove(target, options)) return true;
+            if (!layer.remove(target, options)) continue;
+            if (layer.name === UILayer.Dialog) {
+                this.dialogQueue.onLayerStateChanged();
+            }
+            return true;
         }
         return false;
     }
@@ -573,11 +581,9 @@ export class UIManager {
         this.boundGuiNode = guiNode;
         this.layerOrder.forEach((layerName) => {
             const node = layerNodes.get(layerName)!;
-            const layer = layerName === UILayer.Dialog
-                ? new UIDialogLayerNode(layerName, node)
-                : new UILayerNode(layerName, node);
-            this.layers.set(layerName, layer);
+            this.layers.set(layerName, new UILayerNode(layerName, node));
         });
+        this.dialogQueue.onLayerStateChanged();
 
         return true;
     }
