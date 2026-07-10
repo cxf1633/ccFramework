@@ -15,6 +15,13 @@ interface UIState {
     node: Node;
 }
 
+interface UIOpeningState {
+    config: ResolvedUIConfig;
+    params?: any;
+    cancelled: boolean;
+    promise: Promise<Node | null>;
+}
+
 interface UIPresentable {
     present(params?: any): void;
 }
@@ -33,7 +40,7 @@ class UIDialogQueue {
     private nextScheduled = false;
 
     public constructor(
-        private readonly openNow: (request: DialogRequest) => Promise<Node | null>,
+        private readonly open: (request: DialogRequest) => Promise<Node | null>,
         private readonly hasActiveDialog: () => boolean,
     ) { }
 
@@ -72,7 +79,7 @@ class UIDialogQueue {
         this.opening = true;
         let node: Node | null = null;
         try {
-            node = await this.openNow(request);
+            node = await this.open(request);
         } catch (err) {
             console.warn(`[UIManager] Open dialog failed: ${request.id}`, err);
         } finally {
@@ -94,6 +101,7 @@ export class UIManager {
 
     private readonly layerNodes: Map<UILayer, Node> = new Map();
     private readonly instances: Map<string, UIState> = new Map();
+    private readonly openings: Map<string, UIOpeningState> = new Map();
     private readonly configMap: Map<string, UIConfig> = new Map();
     private readonly nodeIdMap: WeakMap<Node, string> = new WeakMap();
     private readonly dialogQueue: UIDialogQueue;
@@ -101,7 +109,7 @@ export class UIManager {
 
     public constructor(private readonly res: ResManager) {
         this.dialogQueue = new UIDialogQueue(
-            (request) => this.openNow(request.id, request.config, request.params),
+            (request) => this.openInstance(request.id, request.config, request.params),
             () => this.hasActiveInstanceInLayer(UILayer.Dialog),
         );
     }
@@ -110,13 +118,29 @@ export class UIManager {
     public async openById(uiid: string, params?: any): Promise<Node | null> {
         const config = this.getResolvedConfig(uiid);
         if (!config) return null;
-        return this.openResolved(uiid, config, params);
+        if (!this.getLayerNode(config.layer)) return null;
+
+        if (config.layer === UILayer.Dialog) {
+            return new Promise<Node | null>((resolve) => {
+                this.dialogQueue.enqueue({ id: uiid, config, params, resolve });
+            });
+        }
+
+        return this.openInstance(uiid, config, params);
     }
 
     public openPreloadedById(uiid: string, params?: any): Node | null {
         const config = this.getResolvedConfig(uiid);
         if (!config) return null;
-        return this.openPreloadedResolved(uiid, config, params);
+        const layerNode = this.getLayerNode(config.layer);
+        if (!layerNode) return null;
+
+        if (config.layer === UILayer.Dialog && this.dialogQueue.isBusy()) {
+            console.warn(`[UIManager] Cannot open preloaded dialog while busy: ${uiid}`);
+            return null;
+        }
+
+        return this.openCachedInstance(uiid, config, params, layerNode);
     }
 
     public async preloadById(uiid: string): Promise<boolean> {
@@ -131,7 +155,7 @@ export class UIManager {
 
     public closeById(uiid: string, options: UICloseOptions = {}): boolean {
         if (!this.getRegisteredConfig(uiid)) return false;
-        return this.removeInstance(uiid, options);
+        return this.closeInstanceOrOpening(uiid, options);
     }
 
     public hasById(uiid: string): boolean {
@@ -161,13 +185,19 @@ export class UIManager {
             if (!uiid) return false;
             const state = this.getInstance(uiid);
             if (!state || state.node !== target) return false;
-            return this.removeInstance(uiid, options);
+            return this.closeInstanceOrOpening(uiid, options);
         }
 
-        return this.removeInstance(target, options);
+        return this.closeInstanceOrOpening(target, options);
     }
 
     public closeAll(layerName?: UILayer, options: UICloseOptions = {}): void {
+        for (const opening of this.openings.values()) {
+            if (!layerName || opening.config.layer === layerName) {
+                opening.cancelled = true;
+            }
+        }
+
         const ids = [...this.instances.values()]
             .filter((state) => !layerName || state.config.layer === layerName)
             .map((state) => state.id);
@@ -186,85 +216,100 @@ export class UIManager {
         return !!this.get(target);
     }
 
-    private openResolved(uiid: string, config: ResolvedUIConfig, params?: any): Promise<Node | null> {
-        if (!this.getLayerNode(config.layer)) return Promise.resolve(null);
-
-        // Dialog requests are queued; other layers open immediately.
-        if (config.layer === UILayer.Dialog) {
-            return new Promise<Node | null>((resolve) => {
-                this.dialogQueue.enqueue({ id: uiid, config, params, resolve });
-            });
-        }
-
-        return this.openNow(uiid, config, params);
-    }
-
-    private openPreloadedResolved(uiid: string, config: ResolvedUIConfig, params?: any): Node | null {
-        if (!this.getLayerNode(config.layer)) return null;
-
-        if (config.layer === UILayer.Dialog && this.dialogQueue.isBusy()) {
-            console.warn(`[UIManager] Cannot open preloaded dialog while busy: ${uiid}`);
-            return null;
-        }
-
-        return this.openPreloadedNow(uiid, config, params);
-    }
-
-    private async openNow(uiid: string, config: ResolvedUIConfig, params?: any): Promise<Node | null> {
+    private openInstance(uiid: string, config: ResolvedUIConfig, params?: any): Promise<Node | null> {
         const oldState = this.getInstance(uiid);
         if (oldState) {
             const oldNode = this.showInstance(oldState, params);
-            if (oldNode) return oldNode;
+            if (oldNode) return Promise.resolve(oldNode);
         }
 
-        const node = await this.createNode(config.bundle, config.prefab);
-        if (!node || !node.isValid) {
-            console.warn(`[UIManager] Open ui failed: ${uiid} (${config.bundle}/${config.prefab}).`);
-            return null;
+        const currentOpening = this.openings.get(uiid);
+        if (currentOpening) {
+            currentOpening.params = params;
+            currentOpening.cancelled = false;
+            return currentOpening.promise;
         }
 
         const layerNode = this.getLayerNode(config.layer);
-        if (!layerNode) {
-            node.destroy();
-            return null;
+        if (!layerNode) return Promise.resolve(null);
+
+        const cachedNode = this.createCachedNode(config.bundle, config.prefab);
+        if (cachedNode?.isValid) {
+            return Promise.resolve(this.mountInstance(uiid, config, cachedNode, params, layerNode));
         }
 
-        const stateAfterLoad = this.getInstance(uiid);
-        if (stateAfterLoad) {
-            const oldNode = this.showInstance(stateAfterLoad, params);
-            if (oldNode) {
-                node.destroy();
-                return oldNode;
-            }
-        }
-
-        const mountedNode = this.mountInstance(uiid, config, node, params, layerNode);
-        console.log(`[UIManager] Open ui success: ${uiid} (${config.bundle}/${config.prefab}) -> ${config.layer}`);
-        return mountedNode;
+        const opening: UIOpeningState = {
+            config,
+            params,
+            cancelled: false,
+            promise: Promise.resolve(null),
+        };
+        opening.promise = this.loadAndMountInstance(uiid, opening);
+        this.openings.set(uiid, opening);
+        return opening.promise;
     }
 
-    private openPreloadedNow(uiid: string, config: ResolvedUIConfig, params?: any): Node | null {
+    private openCachedInstance(
+        uiid: string,
+        config: ResolvedUIConfig,
+        params: any,
+        layerNode: Node,
+    ): Node | null {
         const oldState = this.getInstance(uiid);
         if (oldState) {
             const oldNode = this.showInstance(oldState, params);
             if (oldNode) return oldNode;
         }
 
-        const node = this.createPreloadedNode(config.bundle, config.prefab);
+        if (this.openings.has(uiid)) {
+            console.warn(`[UIManager] Cannot open preloaded ui while opening: ${uiid}`);
+            return null;
+        }
+
+        const node = this.createCachedNode(config.bundle, config.prefab);
         if (!node || !node.isValid) {
             console.error(`[UIManager] Preloaded ui missing: ${uiid} (${config.bundle}/${config.prefab}).`);
             return null;
         }
 
-        const layerNode = this.getLayerNode(config.layer);
-        if (!layerNode) {
-            node.destroy();
-            return null;
-        }
+        return this.mountInstance(uiid, config, node, params, layerNode);
+    }
 
-        const mountedNode = this.mountInstance(uiid, config, node, params, layerNode);
-        console.log(`[UIManager] Open preloaded ui success: ${uiid} (${config.bundle}/${config.prefab}) -> ${config.layer}`);
-        return mountedNode;
+    private async loadAndMountInstance(uiid: string, opening: UIOpeningState): Promise<Node | null> {
+        try {
+            const { config } = opening;
+            const node = await this.createNode(config.bundle, config.prefab);
+            if (!node || !node.isValid) {
+                console.warn(`[UIManager] Open ui failed: ${uiid} (${config.bundle}/${config.prefab}).`);
+                return null;
+            }
+
+            if (opening.cancelled) {
+                node.destroy();
+                return null;
+            }
+
+            const oldState = this.getInstance(uiid);
+            if (oldState) {
+                const oldNode = this.showInstance(oldState, opening.params);
+                if (oldNode) {
+                    node.destroy();
+                    return oldNode;
+                }
+            }
+
+            const layerNode = this.getLayerNode(config.layer);
+            if (!layerNode) {
+                node.destroy();
+                return null;
+            }
+
+            return this.mountInstance(uiid, config, node, opening.params, layerNode);
+        } finally {
+            if (this.openings.get(uiid) === opening) {
+                this.openings.delete(uiid);
+            }
+        }
     }
 
     private async createNode(bundleName: string, prefabPath: string): Promise<Node | null> {
@@ -284,7 +329,7 @@ export class UIManager {
         return instantiate(result.prefab);
     }
 
-    private createPreloadedNode(bundleName: string, prefabPath: string): Node | null {
+    private createCachedNode(bundleName: string, prefabPath: string): Node | null {
         const prefab = this.res.getCachedPrefabFromBundle(bundleName, prefabPath);
         if (!prefab) {
             return null;
@@ -306,6 +351,7 @@ export class UIManager {
         this.instances.set(uiid, state);
         this.nodeIdMap.set(node, uiid);
         layerNode.addChild(node);
+        console.log(`[UIManager] Open ui success: ${uiid} (${config.bundle}/${config.prefab}) -> ${config.layer}`);
         return node;
     }
 
@@ -343,6 +389,13 @@ export class UIManager {
             this.dialogQueue.onLayerStateChanged();
         }
         return null;
+    }
+
+    private closeInstanceOrOpening(uiid: string, options: UICloseOptions): boolean {
+        const removed = this.removeInstance(uiid, options);
+        const opening = this.openings.get(uiid);
+        if (opening) opening.cancelled = true;
+        return removed || !!opening;
     }
 
     private removeInstance(uiid: string, options: UICloseOptions): boolean {

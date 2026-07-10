@@ -62,6 +62,8 @@ Framework.UIMgr.closeById(UIID.HoldemMain);
 
 运行时实例以注册 UIID 为唯一身份；层级只决定父节点和渲染顺序，不参与实例查找。同一 Prefab 注册为不同 UIID 时会得到相互独立的实例。
 
+非 Dialog UI 在异步加载期间，同一 UIID 的打开请求共享一个 Promise，并使用最新参数完成展示；Dialog 请求仍按队列逐个处理。加载完成前关闭 UIID 会取消当前挂载。
+
 UI 层级从低到高为：
 
 ```text
@@ -96,7 +98,7 @@ Game -> UI -> PopUp -> Dialog -> Toast -> System -> Guide
 - `getCachedPrefabFromBundle`
 - Prefab 缓存清理
 
-Prefab 加载带缓存和并发加载合并。UI 预加载依赖这套缓存，系统 UI 如等待遮罩可以通过 `openPreloadedById` 同步实例化，减少快速网络响应导致的显示/关闭竞态。
+Prefab 加载由 `ResManager` 负责缓存和资源级并发合并。普通 UI 打开时会优先同步复用已缓存 Prefab，缓存未命中才进入异步加载；`openPreloadedById` 只允许同步实例化已缓存资源，适合等待遮罩等要求立即显示的系统 UI。
 
 ## 多语言系统
 
