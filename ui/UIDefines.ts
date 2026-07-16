@@ -23,6 +23,7 @@ export interface UIConfig {
     prefab: string;
     layer: UILayer;
     destroy?: boolean;
+    blockInput?: boolean;
 }
 
 export interface UICloseOptions {

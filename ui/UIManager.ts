@@ -1,4 +1,4 @@
-import { Canvas, director, instantiate, Node, Vec3 } from "cc";
+import { BlockInputEvents, Canvas, director, instantiate, Node, UITransform, Vec3, Widget } from "cc";
 import { ResManager } from "../res/ResManager";
 import {
     UI_LAYER_ORDER,
@@ -7,12 +7,13 @@ import {
     type UIConfig,
 } from "./UIDefines";
 
-type ResolvedUIConfig = UIConfig & Required<Pick<UIConfig, "destroy">>;
+type ResolvedUIConfig = UIConfig & Required<Pick<UIConfig, "destroy" | "blockInput">>;
 
 interface UIState {
     id: string;
     config: ResolvedUIConfig;
     node: Node;
+    inputBlocker: Node | null;
 }
 
 interface UIOpeningState {
@@ -345,11 +346,17 @@ export class UIManager {
         params: any,
         layerNode: Node,
     ): Node {
-        const state: UIState = { id: uiid, config, node };
+        const inputBlocker = config.blockInput
+            ? this.createInputBlocker(uiid, layerNode)
+            : null;
+        const state: UIState = { id: uiid, config, node, inputBlocker };
         this.presentNode(node, params);
         node.setPosition(Vec3.ZERO);
         this.instances.set(uiid, state);
         this.nodeIdMap.set(node, uiid);
+        if (inputBlocker) {
+            layerNode.addChild(inputBlocker);
+        }
         layerNode.addChild(node);
         console.log(`[UIManager] Open ui success: ${uiid} (${config.bundle}/${config.prefab}) -> ${config.layer}`);
         return node;
@@ -359,6 +366,7 @@ export class UIManager {
         const layerNode = this.getLayerNode(state.config.layer);
         if (!layerNode || state.node.parent !== layerNode) {
             this.instances.delete(state.id);
+            this.destroyInputBlocker(state);
             if (state.node.isValid) state.node.destroy();
             if (state.config.layer === UILayer.Dialog) {
                 this.dialogQueue.onLayerStateChanged();
@@ -366,6 +374,15 @@ export class UIManager {
             return null;
         }
 
+        if (state.config.blockInput) {
+            if (!state.inputBlocker?.isValid || state.inputBlocker.parent !== layerNode) {
+                this.destroyInputBlocker(state);
+                state.inputBlocker = this.createInputBlocker(state.id, layerNode);
+                layerNode.addChild(state.inputBlocker);
+            }
+            state.inputBlocker.active = true;
+            state.inputBlocker.setSiblingIndex(layerNode.children.length - 1);
+        }
         state.node.setSiblingIndex(layerNode.children.length - 1);
         this.presentNode(state.node, params);
         return state.node;
@@ -385,6 +402,7 @@ export class UIManager {
         if (state.node?.isValid) return state;
 
         this.instances.delete(uiid);
+        this.destroyInputBlocker(state);
         if (state.config.layer === UILayer.Dialog) {
             this.dialogQueue.onLayerStateChanged();
         }
@@ -403,10 +421,14 @@ export class UIManager {
         if (!state) return false;
 
         state.node.active = false;
+        if (state.inputBlocker?.isValid) {
+            state.inputBlocker.active = false;
+        }
         const destroy = options.destroy ?? state.config.destroy;
         if (destroy) {
             this.instances.delete(uiid);
             state.node.destroy();
+            this.destroyInputBlocker(state);
         }
 
         if (state.config.layer === UILayer.Dialog) {
@@ -415,10 +437,42 @@ export class UIManager {
         return true;
     }
 
+    private createInputBlocker(uiid: string, layerNode: Node): Node {
+        const blocker = new Node(`${uiid}_InputBlocker`);
+        blocker.layer = layerNode.layer;
+
+        const transform = blocker.addComponent(UITransform);
+        const layerTransform = layerNode.getComponent(UITransform);
+        if (layerTransform) {
+            transform.setContentSize(layerTransform.contentSize);
+        }
+
+        const widget = blocker.addComponent(Widget);
+        widget.isAlignLeft = true;
+        widget.isAlignRight = true;
+        widget.isAlignTop = true;
+        widget.isAlignBottom = true;
+        widget.left = 0;
+        widget.right = 0;
+        widget.top = 0;
+        widget.bottom = 0;
+        blocker.addComponent(BlockInputEvents);
+        return blocker;
+    }
+
+    private destroyInputBlocker(state: UIState): void {
+        if (state.inputBlocker?.isValid) {
+            state.inputBlocker.active = false;
+            state.inputBlocker.destroy();
+        }
+        state.inputBlocker = null;
+    }
+
     private hasActiveInstanceInLayer(layerName: UILayer): boolean {
         for (const [uiid, state] of this.instances) {
             if (!state.node?.isValid) {
                 this.instances.delete(uiid);
+                this.destroyInputBlocker(state);
                 continue;
             }
             if (state.config.layer === layerName && state.node.active) return true;
@@ -445,6 +499,7 @@ export class UIManager {
         return {
             ...config,
             destroy: config.destroy ?? true,
+            blockInput: config.blockInput ?? (config.layer !== UILayer.Toast),
         };
     }
 
@@ -530,6 +585,7 @@ export class UIManager {
             const layerNode = resolvedLayerNodes.get(state.config.layer);
             if (!state.node?.isValid || state.node.parent !== layerNode) {
                 this.instances.delete(uiid);
+                this.destroyInputBlocker(state);
             }
         }
         this.layerNodes.clear();
@@ -545,6 +601,7 @@ export class UIManager {
     private clearLayerBindings(): void {
         this.boundGuiNode = null;
         this.layerNodes.clear();
+        this.instances.forEach((state) => this.destroyInputBlocker(state));
         this.instances.clear();
     }
 }
