@@ -1,6 +1,3 @@
-import { error } from "cc";
-import { log } from "cc";
-
 /** 日志类型 */
 export enum LogType {
     /** 标准日志 */
@@ -102,8 +99,7 @@ export class Logger {
      * @param color 日志文本颜色
      */
     private static print(args: any[], color: string) {
-        const browserConsole = typeof console !== "undefined" ? console : null;
-        const backLog = color == LogColor.Red ? browserConsole?.error : browserConsole?.log;
+        const backLog = color == LogColor.Red ? console.error : console.log;
         const timeStr = this.getDateString();
         const textParts: string[] = [timeStr];
         const objectArgs: any[] = [];
@@ -116,18 +112,16 @@ export class Logger {
             textParts.push(String(arg));
         });
 
-        // 构建日志消息
-        const logArgs = [`%c${textParts.join(" ")}`, color];
-        logArgs.push(...objectArgs);
+        const message = textParts.join(" ");
+        const supportsCssStyle = typeof window !== "undefined" && typeof document !== "undefined";
 
-        // 使用 apply 来传递所有参数
-        if (browserConsole && backLog) {
-            backLog.apply(browserConsole, logArgs);
+        if (supportsCssStyle) {
+            backLog.call(console, `%c${message}`, color, ...objectArgs);
             return;
         }
 
-        const ccLog = color == LogColor.Red ? error : log;
-        ccLog.apply(null, logArgs);
+        // 原生和小游戏控制台不一定支持 `%c` CSS 样式，回退为纯文本输出。
+        backLog.call(console, message, ...objectArgs);
     }
 
     private static safeStringify(value: any): string {
