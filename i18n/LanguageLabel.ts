@@ -118,12 +118,15 @@ export class LanguageLabel extends Component {
         const label = this.getComponent(Label);
         const richText = this.getComponent(RichText);
         const font: TTFFont | null = LanguageData.font;
+        const localizedString = this._dataID ? this.string : null;
 
         if (label) {
             if (font) {
                 label.font = font;
             }
-            label.string = this.string;
+            if (localizedString !== null) {
+                label.string = localizedString;
+            }
             this.initFontSize = label.fontSize;
             label.updateRenderData(true);
             return;
@@ -133,7 +136,9 @@ export class LanguageLabel extends Component {
             if (font) {
                 richText.font = font;
             }
-            richText.string = this.string;
+            if (localizedString !== null) {
+                richText.string = localizedString;
+            }
             this.initFontSize = richText.fontSize;
             return;
         }
