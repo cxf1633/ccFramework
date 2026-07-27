@@ -124,7 +124,7 @@ export class UIBase extends Component {
         return this.findNodeByPath(name);
     }
 
-    protected setLabelText(target: string | Node | null | undefined, text: string | number): void {
+    protected setLabelText(target: string | Node | null | undefined | Label, text: string | number): void {
         const node = typeof target === "string" ? this.getNode(target) : target;
         const label = node?.getComponent(Label);
         if (label) {
