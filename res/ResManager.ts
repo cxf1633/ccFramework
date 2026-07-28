@@ -148,11 +148,14 @@ export class ResManager {
     public async loadPrefabFromBundle(bundleName: string, prefabPath: string): Promise<PrefabLoadResult> {
         const keyName = this.getPrefabCacheKey(bundleName, prefabPath);
         const cachedPrefab = this.prefabCache.get(keyName);
-        if (cachedPrefab) {
+        if (cachedPrefab?.isValid) {
             return {
                 success: true,
                 prefab: cachedPrefab,
             };
+        }
+        if (cachedPrefab) {
+            this.prefabCache.delete(keyName);
         }
 
         const loadingPromise = this.loadingPrefabMap.get(keyName);
@@ -169,7 +172,15 @@ export class ResManager {
     }
 
     public getCachedPrefabFromBundle(bundleName: string, prefabPath: string): Prefab | null {
-        return this.prefabCache.get(this.getPrefabCacheKey(bundleName, prefabPath)) || null;
+        const keyName = this.getPrefabCacheKey(bundleName, prefabPath);
+        const prefab = this.prefabCache.get(keyName);
+        if (prefab?.isValid) {
+            return prefab;
+        }
+        if (prefab) {
+            this.prefabCache.delete(keyName);
+        }
+        return null;
     }
 
     public async preloadPrefabFromBundle(bundleName: string, prefabPath: string): Promise<boolean> {

@@ -327,7 +327,13 @@ export class UIManager {
             return null;
         }
 
-        return instantiate(result.prefab);
+        try {
+            return instantiate(result.prefab);
+        } catch (err) {
+            this.res.clearPrefabCache(prefabPath, bundleName);
+            console.warn(`[UIManager] Instantiate ui failed: ${bundleName}/${prefabPath}`, err);
+            return null;
+        }
     }
 
     private createCachedNode(bundleName: string, prefabPath: string): Node | null {
@@ -336,7 +342,13 @@ export class UIManager {
             return null;
         }
 
-        return instantiate(prefab);
+        try {
+            return instantiate(prefab);
+        } catch (err) {
+            this.res.clearPrefabCache(prefabPath, bundleName);
+            console.warn(`[UIManager] Instantiate cached ui failed: ${bundleName}/${prefabPath}`, err);
+            return null;
+        }
     }
 
     private mountInstance(
