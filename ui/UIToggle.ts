@@ -1,7 +1,10 @@
 import { _decorator, Button, Component, Node } from "cc";
-import { UIToggleGroup } from "./UIToggleGroup";
 
 const { ccclass, property, requireComponent } = _decorator;
+
+export interface UIToggleGroupLike {
+    select(toggle: UIToggle): void;
+}
 
 @ccclass("UIToggle")
 @requireComponent(Button)
@@ -9,7 +12,7 @@ export class UIToggle extends Component {
     @property(Node)
     public selectNode: Node | null = null;
 
-    private group: UIToggleGroup | null = null;
+    private group: UIToggleGroupLike | null = null;
     private selected = false;
 
     protected onLoad(): void {
@@ -20,26 +23,23 @@ export class UIToggle extends Component {
 
     protected onEnable(): void {
         this.node.on(Button.EventType.CLICK, this.onClick, this);
-        this.group = this.findGroup();
-        this.group?.register(this);
     }
 
     protected onDisable(): void {
         this.node.off(Button.EventType.CLICK, this.onClick, this);
-        this.group?.unregister(this);
-        this.group = null;
     }
 
     public select(): void {
-        if (!this.group) {
-            this.group = this.findGroup();
-        }
         if (this.group) {
             this.group.select(this);
             return;
         }
 
         this.setSelectedFromGroup(true);
+    }
+
+    public setGroup(group: UIToggleGroupLike | null): void {
+        this.group = group;
     }
 
     public isSelected(): boolean {
@@ -55,18 +55,5 @@ export class UIToggle extends Component {
 
     private onClick(): void {
         this.select();
-    }
-
-    private findGroup(): UIToggleGroup | null {
-        let parent = this.node.parent;
-        while (parent) {
-            const group = parent.getComponent(UIToggleGroup);
-            if (group) {
-                return group;
-            }
-            parent = parent.parent;
-        }
-
-        return null;
     }
 }

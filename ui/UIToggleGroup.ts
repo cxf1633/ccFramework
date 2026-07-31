@@ -1,57 +1,59 @@
-import { _decorator, Component } from "cc";
-import type { UIToggle } from "./UIToggle";
+import { _decorator, Component, Node } from "cc";
+import { UIToggle } from "./UIToggle";
 
-const { ccclass } = _decorator;
+const { ccclass, property } = _decorator;
 
 @ccclass("UIToggleGroup")
 export class UIToggleGroup extends Component {
-    private readonly toggles: UIToggle[] = [];
+    @property([UIToggle])
+    public toggles: UIToggle[] = [];
+
+    @property([Node])
+    public panels: Node[] = [];
+
     private selectedToggle: UIToggle | null = null;
 
-    public register(toggle: UIToggle): void {
-        if (this.toggles.indexOf(toggle) >= 0) {
-            return;
+    protected onLoad(): void {
+        this.toggles.forEach((toggle) => toggle?.setGroup(this));
+        const defaultToggle = this.toggles.find((toggle) => !!toggle);
+        if (defaultToggle) {
+            this.select(defaultToggle);
         }
-
-        this.toggles.push(toggle);
-        if (!this.selectedToggle) {
-            this.select(toggle);
-            return;
-        }
-
-        toggle.setSelectedFromGroup(false);
     }
 
-    public unregister(toggle: UIToggle): void {
-        const index = this.toggles.indexOf(toggle);
-        if (index < 0) {
-            return;
-        }
-
-        this.toggles.splice(index, 1);
-        if (this.selectedToggle !== toggle) {
-            return;
-        }
-
-        this.selectedToggle = null;
-        const nextToggle = this.toggles.find((item) => item.node.activeInHierarchy);
-        if (nextToggle) {
-            this.select(nextToggle);
-        }
+    protected onDestroy(): void {
+        this.toggles.forEach((toggle) => {
+            if (toggle?.isValid) {
+                toggle.setGroup(null);
+            }
+        });
     }
 
     public select(toggle: UIToggle): void {
         if (this.toggles.indexOf(toggle) < 0) {
-            this.toggles.push(toggle);
+            return;
         }
 
         this.selectedToggle = toggle;
         this.toggles.forEach((item) => {
             item.setSelectedFromGroup(item === toggle);
         });
+        this.refreshPanels();
     }
 
     public getSelected(): UIToggle | null {
         return this.selectedToggle;
+    }
+
+    private refreshPanels(): void {
+        const selectedIndex = this.selectedToggle
+            ? this.toggles.indexOf(this.selectedToggle)
+            : -1;
+
+        this.panels.forEach((panel, index) => {
+            if (panel?.isValid) {
+                panel.active = index === selectedIndex;
+            }
+        });
     }
 }
