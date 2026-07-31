@@ -2,7 +2,7 @@ import { BlockInputEvents, Canvas, director, instantiate, Node, UITransform, Vec
 import { ResManager } from "../res/ResManager";
 import {
     UI_LAYER_ORDER,
-    UILayer,
+    UILayerType,
     type UICloseOptions,
     type UIConfig,
 } from "./UIDefines";
@@ -100,7 +100,7 @@ export class UIManager {
     // 越靠后的层 siblingIndex 越高。
     private readonly layerOrder = UI_LAYER_ORDER;
 
-    private readonly layerNodes: Map<UILayer, Node> = new Map();
+    private readonly layerNodes: Map<UILayerType, Node> = new Map();
     private readonly instances: Map<string, UIState> = new Map();
     private readonly openings: Map<string, UIOpeningState> = new Map();
     private readonly configMap: Map<string, UIConfig> = new Map();
@@ -111,7 +111,7 @@ export class UIManager {
     public constructor(private readonly res: ResManager) {
         this.dialogQueue = new UIDialogQueue(
             (request) => this.openInstance(request.id, request.config, request.params),
-            () => this.hasActiveInstanceInLayer(UILayer.Dialog),
+            () => this.hasActiveInstanceInLayer(UILayerType.Dialog),
         );
     }
 
@@ -121,7 +121,7 @@ export class UIManager {
         if (!config) return null;
         if (!this.getLayerNode(config.layer)) return null;
 
-        if (config.layer === UILayer.Dialog) {
+        if (config.layer === UILayerType.Dialog) {
             return new Promise<Node | null>((resolve) => {
                 this.dialogQueue.enqueue({ id: uiid, config, params, resolve });
             });
@@ -136,7 +136,7 @@ export class UIManager {
         const layerNode = this.getLayerNode(config.layer);
         if (!layerNode) return null;
 
-        if (config.layer === UILayer.Dialog && this.dialogQueue.isBusy()) {
+        if (config.layer === UILayerType.Dialog && this.dialogQueue.isBusy()) {
             console.warn(`[UIManager] Cannot open preloaded dialog while busy: ${uiid}`);
             return null;
         }
@@ -173,11 +173,11 @@ export class UIManager {
     }
 
     // 初始化 UI 配置和层级，并返回指定 UI 层，通常由启动流程调用一次即可。
-    public init(configs?: Record<string, UIConfig>, layerName?: UILayer): Node | null {
+    public init(configs?: Record<string, UIConfig>, layerName?: UILayerType): Node | null {
         this.initUIConfigs(configs);
 
         if (!this.ensureSceneLayers()) return null;
-        return this.layerNodes.get(layerName || UILayer.UI) || null;
+        return this.layerNodes.get(layerName || UILayerType.UI) || null;
     }
 
     public close(target: string | Node, options: UICloseOptions = {}): boolean {
@@ -192,7 +192,7 @@ export class UIManager {
         return this.closeInstanceOrOpening(target, options);
     }
 
-    public closeAll(layerName?: UILayer, options: UICloseOptions = {}): void {
+    public closeAll(layerName?: UILayerType, options: UICloseOptions = {}): void {
         for (const opening of this.openings.values()) {
             if (!layerName || opening.config.layer === layerName) {
                 opening.cancelled = true;
@@ -204,7 +204,7 @@ export class UIManager {
             .map((state) => state.id);
         ids.forEach((uiid) => this.removeInstance(uiid, options));
 
-        if (!layerName || layerName === UILayer.Dialog) {
+        if (!layerName || layerName === UILayerType.Dialog) {
             this.dialogQueue.onLayerStateChanged();
         }
     }
@@ -380,7 +380,7 @@ export class UIManager {
             this.instances.delete(state.id);
             this.destroyInputBlocker(state);
             if (state.node.isValid) state.node.destroy();
-            if (state.config.layer === UILayer.Dialog) {
+            if (state.config.layer === UILayerType.Dialog) {
                 this.dialogQueue.onLayerStateChanged();
             }
             return null;
@@ -415,7 +415,7 @@ export class UIManager {
 
         this.instances.delete(uiid);
         this.destroyInputBlocker(state);
-        if (state.config.layer === UILayer.Dialog) {
+        if (state.config.layer === UILayerType.Dialog) {
             this.dialogQueue.onLayerStateChanged();
         }
         return null;
@@ -443,7 +443,7 @@ export class UIManager {
             this.destroyInputBlocker(state);
         }
 
-        if (state.config.layer === UILayer.Dialog) {
+        if (state.config.layer === UILayerType.Dialog) {
             this.dialogQueue.onLayerStateChanged();
         }
         return true;
@@ -480,7 +480,7 @@ export class UIManager {
         state.inputBlocker = null;
     }
 
-    private hasActiveInstanceInLayer(layerName: UILayer): boolean {
+    private hasActiveInstanceInLayer(layerName: UILayerType): boolean {
         for (const [uiid, state] of this.instances) {
             if (!state.node?.isValid) {
                 this.instances.delete(uiid);
@@ -511,7 +511,7 @@ export class UIManager {
         return {
             ...config,
             destroy: config.destroy ?? true,
-            blockInput: config.blockInput ?? (config.layer !== UILayer.Toast),
+            blockInput: config.blockInput ?? (config.layer !== UILayerType.Toast),
         };
     }
 
@@ -524,7 +524,7 @@ export class UIManager {
         return config;
     }
 
-    private getLayerNode(layerName: UILayer): Node | null {
+    private getLayerNode(layerName: UILayerType): Node | null {
         if (!this.ensureSceneLayers()) return null;
         const node = this.layerNodes.get(layerName);
         if (!node?.isValid) {
@@ -564,8 +564,8 @@ export class UIManager {
     }
 
     private bindSceneLayers(guiNode: Node): boolean {
-        const resolvedLayerNodes = new Map<UILayer, Node>();
-        const missingLayers: UILayer[] = [];
+        const resolvedLayerNodes = new Map<UILayerType, Node>();
+        const missingLayers: UILayerType[] = [];
 
         this.layerOrder.forEach((layerName) => {
             const node = guiNode.getChildByName(layerName);

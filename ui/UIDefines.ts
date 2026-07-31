@@ -1,4 +1,4 @@
-export enum UILayer {
+export enum UILayerType {
     Game = "LayerGame",       // 游戏内固定 UI
     UI = "LayerUI",           // 普通全屏界面
     PopUp = "LayerPopUp",     // 普通非强模态弹窗。比如道具详情、活动小窗、奖励详情、个人信息小弹层。
@@ -8,20 +8,20 @@ export enum UILayer {
     Guide = "LayerGuide",     // 最高层。比如新手引导遮罩、手指提示、强制点击区域、高亮框。
 }
 
-export const UI_LAYER_ORDER: readonly UILayer[] = [
-    UILayer.Game,
-    UILayer.UI,
-    UILayer.PopUp,
-    UILayer.Dialog,
-    UILayer.Toast,
-    UILayer.System,
-    UILayer.Guide,
+export const UI_LAYER_ORDER: readonly UILayerType[] = [
+    UILayerType.Game,
+    UILayerType.UI,
+    UILayerType.PopUp,
+    UILayerType.Dialog,
+    UILayerType.Toast,
+    UILayerType.System,
+    UILayerType.Guide,
 ];
 
 export interface UIConfig {
     bundle: string;
     prefab: string;
-    layer: UILayer;
+    layer: UILayerType;
     destroy?: boolean;
     blockInput?: boolean;
 }
