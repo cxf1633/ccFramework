@@ -13,6 +13,10 @@ export class UIStepSlider extends Slider {
     @property(Node)
     img_split: Node = null;
 
+    /** 可选的滑动进度填充节点，节点横向锚点应设为 0 */
+    @property(Node)
+    img_fill: Node = null;
+
     /** 当前生成的所有分隔线节点 */
     private splitNodes: Node[] = [];
     /** 总档位数（步进数量） */
@@ -24,6 +28,7 @@ export class UIStepSlider extends Slider {
         // 先移除旧的监听再注册，防止重复监听导致回调执行多次
         this.node.off(SLIDER_EVENT, this.onSliderChanged, this);
         this.node.on(SLIDER_EVENT, this.onSliderChanged, this);
+        this.refreshFillWidth();
     }
 
     /**
@@ -108,8 +113,12 @@ export class UIStepSlider extends Slider {
         this.keepHandleOnTop(splitParent);
     }
 
-    /** 保证滑动条上的滑块手柄始终显示在最上层（不被分隔线遮挡） */
+    /** 保证填充节点高于分隔线，滑块手柄保持在最上层 */
     private keepHandleOnTop(splitParent: Node): void {
+        // if (this.img_fill?.parent === splitParent) {
+        //     this.img_fill.setSiblingIndex(splitParent.children.length - 1);
+        // }
+
         const handleNode = this.node.getChildByName("Handle");
         if (handleNode?.parent === splitParent) {
             handleNode.setSiblingIndex(splitParent.children.length - 1);
@@ -120,7 +129,7 @@ export class UIStepSlider extends Slider {
     private onSliderChanged(): void {
         if (this.stepCount <= 1) {
             this.selectedIndex = 0;
-            this.progress = 0;
+            this.setProgressByIndex(this.selectedIndex);
             this.emitStepChanged();
             return;
         }
@@ -133,6 +142,22 @@ export class UIStepSlider extends Slider {
     /** 根据档位索引计算并设置滑块的进度（0~1） */
     private setProgressByIndex(index: number): void {
         this.progress = this.stepCount > 1 ? index / (this.stepCount - 1) : 0;
+        this.refreshFillWidth();
+    }
+
+    /** 根据滑动进度刷新可选填充节点的宽度 */
+    private refreshFillWidth(): void {
+        if (!this.img_fill?.isValid) {
+            return;
+        }
+
+        const sliderTransform = this.node.getComponent(UITransform);
+        const fillTransform = this.img_fill.getComponent(UITransform);
+        if (!sliderTransform || !fillTransform) {
+            return;
+        }
+
+        fillTransform.setContentSize(sliderTransform.contentSize.width * this.progress, fillTransform.contentSize.height);
     }
 
     /** 将索引钳制到合法范围 [0, stepCount - 1]，并向下取整 */
