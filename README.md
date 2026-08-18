@@ -79,6 +79,7 @@ Game -> UI -> PopUp -> Dialog -> Toast -> System -> Guide
 - `onInit` / `onShow` / `onHide` / `onDispose` 生命周期。
 - `present(params)`：在显示前写入参数，并在界面已显示时主动刷新 `onShow`。
 - 子节点轻量索引：`getNode(name)`。
+- 节点路径：完整路径、相对路径、同名下标路径和按路径查找子节点。
 - 按节点名自动绑定按钮点击：按钮节点名匹配同名方法时自动注册。
 - 手动按钮绑定：`registerButtonClick` / `registerButtonClicks`。
 
@@ -86,6 +87,7 @@ Game -> UI -> PopUp -> Dialog -> Toast -> System -> Guide
 
 - 键盘事件开关：`setKeyboard(true | false)`。
 - 秒级 Label 刷新：`startSecondLabel` / `stopSecondLabel`。
+- 节点定位与移动：`setNodeToNode` / `moveNodeToNode`。
 - 通用界面关闭：`btn_close()`。
 - 界面重复展示、隐藏或销毁时自动清理输入监听和定时任务。
 
@@ -218,7 +220,6 @@ await Framework.SceneMgr.preloadScene("gameBundle", "gameScene");
 - `AesUtils`：AES-CBC-PKCS7 加密/解密。
 - `ZlibUtils`：字符串压缩、解压，以及 Base64 编解码 polyfill。
 - `NumberFormatUtils`：筹码/数量格式化，支持 K/M/B 单位和小数格式控制。
-- `NodePathUtils`：节点完整路径、相对路径、带同名下标路径生成，以及按路径查找子节点。
 
 ## 扩展原则
 

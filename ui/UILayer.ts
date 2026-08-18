@@ -1,10 +1,19 @@
-import { _decorator, EventKeyboard, Input, input, Label, Node } from "cc";
+import { _decorator, EventKeyboard, Input, input, Label, Node, Tween, tween, Vec3 } from "cc";
 import { Framework } from "../Framework";
 import { UIBase } from "./UIBase";
 
 const { ccclass } = _decorator;
 
 type SecondLabelValueProvider = () => string | number;
+
+export interface UINodeMoveOptions {
+    startScaleRatio?: number;
+}
+
+interface NodeMoveTweenState {
+    tween: Tween<Node>;
+    originalScale: Vec3 | null;
+}
 
 /**
  * 完整 UI 界面基类。
@@ -13,6 +22,7 @@ type SecondLabelValueProvider = () => string | number;
 @ccclass("UILayer")
 export class UILayer extends UIBase {
     private readonly secondLabelTasks: Map<Label, SecondLabelValueProvider> = new Map();
+    private readonly movingTweens: Map<Node, NodeMoveTweenState> = new Map();
     private secondLabelTimerRunning = false;
 
     protected onEnable(): void {
@@ -23,11 +33,13 @@ export class UILayer extends UIBase {
     protected onDisable(): void {
         super.onDisable();
         this.clearLayerResources();
+        this.stopAllNodeMoveTweens();
     }
 
     protected onDestroy(): void {
         this.clearLayerResources();
         super.onDestroy();
+        this.stopAllNodeMoveTweens();
     }
 
     public present(params?: any): void {
@@ -96,10 +108,116 @@ export class UILayer extends UIBase {
         }
     }
 
+    public moveNodeToNode(
+        target: Node | null | undefined,
+        to: Node | null | undefined,
+        speed: number,
+        options: UINodeMoveOptions = {},
+    ): void {
+        const targetPosition = this.getNodePositionInTargetParent(target, to);
+        if (!target?.isValid || !targetPosition) {
+            return;
+        }
+
+        this.stopNodeMoveTween(target);
+
+        const startPosition = target.position.clone();
+        const distance = Vec3.distance(startPosition, targetPosition);
+        if (distance <= 0 || speed <= 0) {
+            target.setPosition(targetPosition);
+            return;
+        }
+
+        const originalScale = this.getMoveOriginalScale(target, options);
+        const moveProps = originalScale
+            ? { position: targetPosition, scale: originalScale }
+            : { position: targetPosition };
+        const moveTween = tween(target)
+            .to(distance / speed, moveProps, { easing: "linear" })
+            .call(() => {
+                const moveState = this.movingTweens.get(target);
+                if (moveState?.tween === moveTween) {
+                    this.movingTweens.delete(target);
+                }
+            })
+            .start();
+        this.movingTweens.set(target, { tween: moveTween, originalScale });
+    }
+
+    public setNodeToNode(target: Node | null | undefined, to: Node | null | undefined): void {
+        const position = this.getNodePositionInTargetParent(target, to);
+        if (!target?.isValid || !position) {
+            return;
+        }
+
+        this.stopNodeMoveTween(target);
+        target.setPosition(position);
+    }
+
     private clearLayerResources(): void {
         this.setKeyboard(false);
         this.secondLabelTasks.clear();
         this.stopSecondLabelTimer();
+    }
+
+    private stopNodeMoveTween(target: Node | null | undefined): void {
+        if (!target) {
+            return;
+        }
+
+        const moveState = this.movingTweens.get(target);
+        if (!moveState) {
+            return;
+        }
+
+        moveState.tween.stop();
+        this.movingTweens.delete(target);
+        if (moveState.originalScale && target.isValid) {
+            target.setScale(moveState.originalScale);
+        }
+    }
+
+    private stopAllNodeMoveTweens(): void {
+        this.movingTweens.forEach((moveState, target) => {
+            moveState.tween.stop();
+            if (moveState.originalScale && target.isValid) {
+                target.setScale(moveState.originalScale);
+            }
+        });
+        this.movingTweens.clear();
+    }
+
+    private getMoveOriginalScale(target: Node, options: UINodeMoveOptions): Vec3 | null {
+        const startScaleRatio = Math.max(0, options.startScaleRatio ?? 1);
+        if (!Number.isFinite(startScaleRatio) || startScaleRatio === 1) {
+            return null;
+        }
+
+        const originalScale = target.scale.clone();
+        target.setScale(
+            originalScale.x * startScaleRatio,
+            originalScale.y * startScaleRatio,
+            originalScale.z,
+        );
+        return originalScale;
+    }
+
+    private getNodePositionInTargetParent(
+        target: Node | null | undefined,
+        positionNode: Node | null | undefined,
+    ): Vec3 | null {
+        if (!target?.isValid || !positionNode?.isValid) {
+            return null;
+        }
+
+        const position = new Vec3();
+        const parent = target.parent;
+        if (!parent?.isValid) {
+            return positionNode.worldPosition.clone();
+        }
+
+        parent.inverseTransformPoint(position, positionNode.worldPosition);
+        return position;
     }
 
     private refreshSecondLabels(): void {

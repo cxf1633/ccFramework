@@ -1,5 +1,4 @@
-import { _decorator, Button, Component, Label, Node, Tween, tween, Vec3 } from "cc";
-import { NodePathUtils } from "../utils/NodePathUtils";
+import { _decorator, Button, Component, Label, Node } from "cc";
 
 const { ccclass } = _decorator;
 
@@ -16,20 +15,19 @@ export interface UIButtonBindingConfig {
     customEventData?: string;
 }
 
-export interface UINodeMoveOptions {
-    startScaleRatio?: number;
-}
-
-interface NodeMoveTweenState {
-    tween: Tween<Node>;
-    originalScale: Vec3 | null;
+export interface NodePathOptions {
+    /** 指定路径根节点；不传时使用场景最顶层节点。 */
+    root?: Node | null;
+    /** 是否包含根节点名称，默认 true。 */
+    includeRoot?: boolean;
+    /** 同名兄弟节点是否追加下标，默认 false。 */
+    includeSiblingIndex?: boolean;
 }
 
 @ccclass("UIBase")
 export class UIBase extends Component {
     public nodes: Map<string, Node> = null!;
     private readonly buttonBindings: ButtonBinding[] = [];
-    private readonly movingTweens: Map<Node, NodeMoveTweenState> = new Map();
     private showParams: any = null;
 
 
@@ -44,7 +42,6 @@ export class UIBase extends Component {
 
     protected onDestroy(): void {
         this.onDispose();
-        this.stopAllNodeMoveTweens();
         this.clearButtonBindings();
         if (this.nodes) {
             this.nodes.clear();
@@ -57,7 +54,6 @@ export class UIBase extends Component {
     }
     protected onDisable(): void {
         this.onHide();
-        this.stopAllNodeMoveTweens();
     }
     protected onInit(): void {
         // 子类自己的初始化逻辑
@@ -90,7 +86,60 @@ export class UIBase extends Component {
             if (node) return node;
         }
 
-        return this.findNodeByPath(name);
+        return this.getChildByPath(this.node, name);
+    }
+
+    /** 获取从场景最顶层节点到目标节点的完整路径。 */
+    public getFullPath(node: Node | null): string {
+        return this.getPath(node);
+    }
+
+    /** 获取目标节点相对指定根节点的路径。 */
+    public getRelativePath(node: Node | null, root: Node = this.node, includeRoot: boolean = true): string {
+        return this.getPath(node, { root, includeRoot });
+    }
+
+    /** 获取带同名兄弟节点下标的路径。 */
+    public getIndexedPath(node: Node | null, includeRoot: boolean = false): string {
+        return this.getPath(node, { includeRoot, includeSiblingIndex: true });
+    }
+
+    /** 从指定根节点开始，按相对路径查找子节点。 */
+    public getChildByPath(root: Node | null | undefined, path: string): Node | null {
+        const names = path.split("/").filter(Boolean);
+        let current = root || null;
+        if (current && names[0] === current.name) {
+            names.shift();
+        }
+
+        for (const name of names) {
+            current = current?.getChildByName(name) || null;
+            if (!current) return null;
+        }
+
+        return current;
+    }
+
+    /** 按参数生成节点路径。 */
+    public getPath(node: Node | null, options: NodePathOptions = {}): string {
+        const names: string[] = [];
+        let current: Node | null = node;
+        const includeRoot = options.includeRoot ?? true;
+
+        while (current) {
+            const isRoot = options.root ? current === options.root : current.parent == null;
+            if (!isRoot || includeRoot) {
+                names.unshift(this.getPathName(current, !!options.includeSiblingIndex));
+            }
+
+            if (isRoot) {
+                break;
+            }
+
+            current = current.parent;
+        }
+
+        return names.join("/");
     }
 
     protected setLabelText(target: string | Node | null | undefined | Label, text: string | number): void {
@@ -105,104 +154,6 @@ export class UIBase extends Component {
         if (node?.isValid) {
             node.active = active;
         }
-    }
-
-    public moveNodeToNode(target: Node | null | undefined, to: Node | null | undefined, speed: number, options: UINodeMoveOptions = {}): void {
-        const targetPosition = this.getNodePositionInTargetParent(target, to);
-        if (!target?.isValid || !targetPosition) {
-            return;
-        }
-
-        this.stopNodeMoveTween(target);
-
-        const startPosition = target.position.clone();
-        const distance = Vec3.distance(startPosition, targetPosition);
-        if (distance <= 0 || speed <= 0) {
-            target.setPosition(targetPosition);
-            return;
-        }
-
-        const originalScale = this.getMoveOriginalScale(target, options);
-        const moveProps = originalScale
-            ? { position: targetPosition, scale: originalScale }
-            : { position: targetPosition };
-        const moveTween = tween(target)
-            .to(distance / speed, moveProps, { easing: "linear" })
-            .call(() => {
-                const moveState = this.movingTweens.get(target);
-                if (moveState?.tween === moveTween) {
-                    this.movingTweens.delete(target);
-                }
-            })
-            .start();
-        this.movingTweens.set(target, { tween: moveTween, originalScale });
-    }
-
-    public setNodeToNode(target: Node | null | undefined, to: Node | null | undefined): void {
-        const position = this.getNodePositionInTargetParent(target, to);
-        if (!target?.isValid || !position) {
-            return;
-        }
-
-        this.stopNodeMoveTween(target);
-        target.setPosition(position);
-    }
-
-    private stopNodeMoveTween(target: Node | null | undefined): void {
-        if (!target) {
-            return;
-        }
-
-        const moveState = this.movingTweens.get(target);
-        if (!moveState) {
-            return;
-        }
-
-        moveState.tween.stop();
-        this.movingTweens.delete(target);
-        if (moveState.originalScale && target.isValid) {
-            target.setScale(moveState.originalScale);
-        }
-    }
-
-    private stopAllNodeMoveTweens(): void {
-        this.movingTweens.forEach((moveState, target) => {
-            moveState.tween.stop();
-            if (moveState.originalScale && target.isValid) {
-                target.setScale(moveState.originalScale);
-            }
-        });
-        this.movingTweens.clear();
-    }
-
-    private getMoveOriginalScale(target: Node, options: UINodeMoveOptions): Vec3 | null {
-        const startScaleRatio = Math.max(0, options.startScaleRatio ?? 1);
-        if (!Number.isFinite(startScaleRatio) || startScaleRatio === 1) {
-            return null;
-        }
-
-        const originalScale = target.scale.clone();
-        target.setScale(
-            originalScale.x * startScaleRatio,
-            originalScale.y * startScaleRatio,
-            originalScale.z,
-        );
-        return originalScale;
-    }
-
-    private getNodePositionInTargetParent(target: Node | null | undefined, positionNode: Node | null | undefined): Vec3 | null {
-        if (!target?.isValid || !positionNode?.isValid) {
-            return null;
-        }
-
-        const position = new Vec3();
-        const parent = target.parent;
-        if (!parent?.isValid) {
-            return positionNode.worldPosition.clone();
-        }
-
-        parent.inverseTransformPoint(position, positionNode.worldPosition);
-        return position;
     }
 
     protected nodeTreeInfoLite(): void {
@@ -245,7 +196,7 @@ export class UIBase extends Component {
 
         const button = node.getComponent(Button);
         if (!button) {
-            console.warn(`[UIBase] Button component not found: ${NodePathUtils.getRelativePath(node, this.node)}`);
+            console.warn(`[UIBase] Button component not found: ${this.getRelativePath(node)}`);
             return null;
         }
 
@@ -300,7 +251,7 @@ export class UIBase extends Component {
 
     private resolveNode(target: string | Node): Node | null {
         if (typeof target !== "string") return target;
-        return this.findNodeByPath(target);
+        return this.getChildByPath(this.node, target);
     }
 
     private resolveHandler(handler: ButtonHandler | string): ButtonHandler | null {
@@ -308,19 +259,6 @@ export class UIBase extends Component {
 
         const method = (this as any)[handler];
         return typeof method === "function" ? method : null;
-    }
-
-    private findNodeByPath(path: string): Node | null {
-        const names = path.split("/").filter(Boolean);
-        if (names[0] === this.node.name) names.shift();
-
-        let current: Node | null = this.node;
-        for (const name of names) {
-            current = current?.getChildByName(name) || null;
-            if (!current) return null;
-        }
-
-        return current;
     }
 
     private collectNodeTreeInfoLite(parent: Node, nodes: Map<string, Node>): void {
@@ -354,6 +292,30 @@ export class UIBase extends Component {
     }
 
     private getTargetName(target: string | Node): string {
-        return typeof target === "string" ? target : NodePathUtils.getRelativePath(target, this.node);
+        return typeof target === "string" ? target : this.getRelativePath(target);
+    }
+
+    private getPathName(node: Node, includeSiblingIndex: boolean): string {
+        if (!includeSiblingIndex || !this.hasSameNameSiblings(node)) {
+            return node.name;
+        }
+
+        return `${node.name}[${this.getSiblingIndex(node)}]`;
+    }
+
+    private getSiblingIndex(node: Node): number {
+        if (!node.parent) {
+            return -1;
+        }
+
+        return node.parent.children.indexOf(node);
+    }
+
+    private hasSameNameSiblings(node: Node): boolean {
+        if (!node.parent) {
+            return false;
+        }
+
+        return node.parent.children.filter((sibling) => sibling.name === node.name).length > 1;
     }
 }
