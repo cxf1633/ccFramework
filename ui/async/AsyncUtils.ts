@@ -1,6 +1,6 @@
 import { Component, Node } from "cc";
-import { message } from "../event/MessageManager";
-import { Logger } from "../log/Logger";
+import { message } from "../../event/MessageManager";
+import { Logger } from "../../log/Logger";
 
 export class AsyncUtils {
     /**

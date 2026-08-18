@@ -44,13 +44,13 @@ assets/framework
 ├── scene/      场景加载与预加载
 ├── storage/    本地存储封装
 ├── tools/      框架侧工具入口与框架语言 Excel
-├── ui/         UI 层级、窗口生命周期、UIBase 基类
+├── ui/         UI 层级、窗口生命周期、UIBase 基类、复用组件和 UI 异步辅助
 └── utils/      通用工具函数
 ```
 
 ## UI 系统
 
-UI 系统由 `ui/UIManager.ts`、`ui/UIBase.ts` 和 `ui/UIDefines.ts` 组成。
+UI 系统由 `ui/UIManager.ts`、`ui/UIBase.ts` 和 `ui/UIDefines.ts` 组成；可复用 UI 组件位于 `ui/components/`，依赖组件生命周期的异步辅助位于 `ui/async/`。
 
 `UIManager` 只认识通用配置结构，不导入业务 UI 表。业务层需要在启动阶段注入 UI 配置，然后通过注册 ID 打开：
 
