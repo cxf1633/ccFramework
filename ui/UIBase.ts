@@ -1,11 +1,9 @@
-import { _decorator, Button, Component, EventKeyboard, Input, input, Label, Node, Tween, tween, Vec3 } from "cc";
-import { Framework } from "../Framework";
+import { _decorator, Button, Component, Label, Node, Tween, tween, Vec3 } from "cc";
 import { NodePathUtils } from "../utils/NodePathUtils";
 
 const { ccclass } = _decorator;
 
 type ButtonHandler = (event?: any, customEventData?: string) => void;
-type SecondLabelValueProvider = () => string | number;
 
 interface ButtonBinding {
     node: Node;
@@ -32,8 +30,6 @@ export class UIBase extends Component {
     public nodes: Map<string, Node> = null!;
     private readonly buttonBindings: ButtonBinding[] = [];
     private readonly movingTweens: Map<Node, NodeMoveTweenState> = new Map();
-    private readonly secondLabelTasks: Map<Label, SecondLabelValueProvider> = new Map();
-    private secondLabelTimerRunning = false;
     private showParams: any = null;
 
 
@@ -47,7 +43,6 @@ export class UIBase extends Component {
     }
 
     protected onDestroy(): void {
-        this.clearSecondLabelTasks();
         this.onDispose();
         this.stopAllNodeMoveTweens();
         this.clearButtonBindings();
@@ -58,12 +53,10 @@ export class UIBase extends Component {
     }
 
     protected onEnable(): void {
-        this.clearSecondLabelTasks();
         this.onShow(this.showParams);
     }
     protected onDisable(): void {
         this.onHide();
-        this.clearSecondLabelTasks();
         this.stopAllNodeMoveTweens();
     }
     protected onInit(): void {
@@ -79,41 +72,10 @@ export class UIBase extends Component {
 
     }
 
-    public btn_close(): void {
-        Framework.UIMgr.close(this.node);
-    }
-
-    /**
-     * 键盘事件开关
-     * @param on 打开键盘事件为true
-     */
-    setKeyboard(on: boolean) {
-        if (on) {
-            input.on(Input.EventType.KEY_DOWN, this.onKeyDown, this);
-            input.on(Input.EventType.KEY_UP, this.onKeyUp, this);
-            input.on(Input.EventType.KEY_PRESSING, this.onKeyPressing, this);
-        }
-        else {
-            input.off(Input.EventType.KEY_DOWN, this.onKeyDown, this);
-            input.off(Input.EventType.KEY_UP, this.onKeyUp, this);
-            input.off(Input.EventType.KEY_PRESSING, this.onKeyPressing, this);
-        }
-    }
-
-    /** 键按下 */
-    protected onKeyDown(event: EventKeyboard) { }
-
-    /** 键放开 */
-    protected onKeyUp(event: EventKeyboard) { }
-
-    /** 键长按 */
-    protected onKeyPressing(event: EventKeyboard) { }
-
     public present(params?: any): void {
         const wasActive = this.node.activeInHierarchy;
         this.setShowParams(params);
         if (wasActive) {
-            this.clearSecondLabelTasks();
             this.onShow(this.showParams);
         }
     }
@@ -137,63 +99,6 @@ export class UIBase extends Component {
         if (label) {
             label.string = String(text);
         }
-    }
-
-    protected startSecondLabel(
-        target: string | Node | null | undefined | Label,
-        valueProvider: SecondLabelValueProvider,
-    ): void {
-        const label = target instanceof Label
-            ? target
-            : (typeof target === "string" ? this.getNode(target) : target)?.getComponent(Label);
-        if (!label?.isValid) {
-            return;
-        }
-
-        this.secondLabelTasks.set(label, valueProvider);
-        label.string = String(valueProvider());
-        if (!this.secondLabelTimerRunning) {
-            this.schedule(this.refreshSecondLabels, 1);
-            this.secondLabelTimerRunning = true;
-        }
-    }
-
-    protected stopSecondLabel(target: string | Node | null | undefined | Label): void {
-        const label = target instanceof Label
-            ? target
-            : (typeof target === "string" ? this.getNode(target) : target)?.getComponent(Label);
-        if (label) {
-            this.secondLabelTasks.delete(label);
-        }
-        if (this.secondLabelTasks.size === 0) {
-            this.stopSecondLabelTimer();
-        }
-    }
-
-    private refreshSecondLabels(): void {
-        this.secondLabelTasks.forEach((valueProvider, label) => {
-            if (!label.isValid) {
-                this.secondLabelTasks.delete(label);
-                return;
-            }
-            label.string = String(valueProvider());
-        });
-        if (this.secondLabelTasks.size === 0) {
-            this.stopSecondLabelTimer();
-        }
-    }
-
-    private clearSecondLabelTasks(): void {
-        this.secondLabelTasks.clear();
-        this.stopSecondLabelTimer();
-    }
-
-    private stopSecondLabelTimer(): void {
-        if (!this.secondLabelTimerRunning) {
-            return;
-        }
-        this.unschedule(this.refreshSecondLabels);
-        this.secondLabelTimerRunning = false;
     }
 
     protected setActive(node: Node | null | undefined, active: boolean): void {

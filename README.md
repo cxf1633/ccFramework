@@ -50,7 +50,7 @@ assets/framework
 
 ## UI 系统
 
-UI 系统由 `ui/UIManager.ts`、`ui/UIBase.ts` 和 `ui/UIDefines.ts` 组成；可复用 UI 组件位于 `ui/components/`，依赖组件生命周期的异步辅助位于 `ui/async/`。
+UI 系统由 `ui/UIManager.ts`、`ui/UIBase.ts`、`ui/UILayer.ts` 和 `ui/UIDefines.ts` 组成；可复用 UI 组件位于 `ui/components/`，依赖组件生命周期的异步辅助位于 `ui/async/`。
 
 `UIManager` 只认识通用配置结构，不导入业务 UI 表。业务层需要在启动阶段注入 UI 配置，然后通过注册 ID 打开：
 
@@ -81,7 +81,13 @@ Game -> UI -> PopUp -> Dialog -> Toast -> System -> Guide
 - 子节点轻量索引：`getNode(name)`。
 - 按节点名自动绑定按钮点击：按钮节点名匹配同名方法时自动注册。
 - 手动按钮绑定：`registerButtonClick` / `registerButtonClicks`。
+
+`UILayer` 继承 `UIBase`，用于完整 UI 界面，并统一管理只在界面显示期间有效的键盘监听和秒级 Label 定时任务：
+
 - 键盘事件开关：`setKeyboard(true | false)`。
+- 秒级 Label 刷新：`startSecondLabel` / `stopSecondLabel`。
+- 通用界面关闭：`btn_close()`。
+- 界面重复展示、隐藏或销毁时自动清理输入监听和定时任务。
 
 ## 资源系统
 

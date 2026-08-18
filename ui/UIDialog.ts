@@ -1,4 +1,5 @@
 import { _decorator } from 'cc';
+import { Framework } from '../Framework';
 import { UIBase } from './UIBase';
 
 const { ccclass } = _decorator;
@@ -38,6 +39,10 @@ export class UIDialog extends UIBase {
         this.okFunc = null;
         this.cancelFunc = null;
         this.onDialogHide();
+    }
+
+    public btn_close(): void {
+        Framework.UIMgr.close(this.node);
     }
 
     public async btn_ok(): Promise<void> {
