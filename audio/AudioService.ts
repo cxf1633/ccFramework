@@ -101,7 +101,7 @@ export class AudioService {
 
     /** 直接播放已加载的 AudioClip 音效。 */
     public playSoundClip(clip: AudioClip, volume: number = 1, logName: string = clip.name): void {
-        Logger.log(`[AudioService] 播放音效: ${logName.substring(logName.lastIndexOf('/') + 1)}`);
+        // Logger.log(`[AudioService] 播放音效: ${logName.substring(logName.lastIndexOf('/') + 1)}`);
         this.nativeAudio.playOneShot(clip, this.getSoundPlaybackVolume(volume), "auto");
     }
 
