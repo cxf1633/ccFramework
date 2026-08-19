@@ -10,6 +10,7 @@
 import { Framework } from "db://assets/framework/Framework";
 
 Framework.ResourcesMgr;
+Framework.AudioMgr;
 Framework.SceneMgr;
 Framework.UIMgr;
 Framework.MessageManager;
@@ -19,6 +20,7 @@ Framework.LanguageMgr;
 当前入口暴露的能力包括：
 
 - `ResourcesMgr`：资源、Bundle、Prefab、远程图片加载与缓存。
+- `AudioMgr`：音乐、音效、资源缓存、音量和静音状态管理，支持 Cocos 与微信原生音频后端。
 - `SceneMgr`：场景加载与 Bundle 场景预加载。
 - `UIMgr`：注册式 UI 打开、关闭、预加载与层级管理。
 - `EventManager`：基于 Cocos `Node` 的全局事件。

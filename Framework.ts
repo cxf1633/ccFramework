@@ -1,3 +1,4 @@
+import { AudioService } from "./audio/AudioService";
 import { EventManager } from "./event/EventManager";
 import { message } from "./event/MessageManager";
 import { HttpManager } from "./http/HttpManager";
@@ -13,6 +14,7 @@ const resourcesMgr = new ResManager();
 
 export class Framework {
     public static readonly ResourcesMgr = resourcesMgr;
+    public static readonly AudioMgr = new AudioService(resourcesMgr);
     public static readonly SceneMgr = new SceneManager(resourcesMgr);
     public static readonly UIMgr = new UIManager(resourcesMgr);
 
