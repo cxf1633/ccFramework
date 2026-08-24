@@ -11,7 +11,7 @@
     "ERROR_102": "User account deactivated",
     "ERROR_300": "Parameter error",
     "ERROR_301": "Server error",
-    "ERROR_302": "Insufficient currency",
+    "ERROR_302": "Insufficient chips",
     "ERROR_303": "Configuration not found",
     "ERROR_304": "Task not found",
     "ERROR_305": "Reward already claimed",
