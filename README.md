@@ -85,6 +85,12 @@ Game -> UI -> PopUp -> Dialog -> Toast -> System -> Guide
 - 按节点名自动绑定按钮点击：按钮节点名匹配同名方法时自动注册。
 - 手动按钮绑定：`registerButtonClick` / `registerButtonClicks`。
 
+通用 UI 组件位于 `ui/components/`。其中 `ui/components/effects/UIGradient.ts` 为
+`Label`、`Sprite` 等 `UIRenderer` 提供横向或纵向双色渐变；默认材质位于
+`ui/materials/gradient/ui-gradient.mtl`，由业务节点在 Inspector 中直接绑定，不需要运行时加载。
+组件启用时为当前渲染器创建独立材质实例，业务代码可通过 `setColors(startColor, endColor)`
+更新颜色，不会修改共享材质，也不会在运行时逐帧刷新材质属性。
+
 `UILayer` 继承 `UIBase`，用于完整 UI 界面，并统一管理只在界面显示期间有效的键盘监听和秒级 Label 定时任务：
 
 - 键盘事件开关：`setKeyboard(true | false)`。
