@@ -97,7 +97,9 @@ Game -> UI -> PopUp -> Dialog -> Toast -> System -> Guide
 `radius` 和 `startAngle` 均分计算。`centerNode` 指定数值为 0 时顶点收缩到的中心点，
 可以直接摆到网格切图的中心上，留空则用组件节点自身的位置。外层网格、轴线和文字由业务节点用切图和 Label 摆放，
 组件只画数据区域，通过多层描边叠出发光，并支持由中心向外的展开动画。
-业务侧调用 `setValues(values, animated)` 刷新，`clear()` 清空。
+业务侧调用 `setValues(values, animated)` 刷新，`clear()` 清空。传入的是各轴原始数值，
+组件按 `axisMaxValues`（按下标与 `axisNodes` 对应，也可运行时用 `setAxisMaxValues` 覆盖）
+的满格上限归一化，超出上限的部分顶格，某轴上限留空或 <= 0 时按 1 处理，即认为传入值已归一化。
 配置了 `axisKeys`（按下标与 `axisNodes` 对应）后可以改用 `setValuesByKey(valueMap, animated)`
 按名字传值，避免顺序错位。数值刷新会从当前形状过渡到新形状，首次设置即表现为由中心展开。
 组件带 `@executeInEditMode`，在编辑器里按 `previewValues` 预览数据区域，美术可以直接调

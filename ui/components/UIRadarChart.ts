@@ -39,6 +39,14 @@ export class UIRadarChart extends Component {
     @property([CCString])
     axisKeys: string[] = [];
 
+    /**
+     * 各轴满格上限，按下标与 axisNodes 一一对应，业务侧直接传原始数值，
+     * 组件用 数值 / 上限 归一化。留空或某轴上限 <= 0 时该轴按上限 1 处理，
+     * 即认为业务传进来的已经是 0~1 的归一化数值。
+     */
+    @property([CCFloat])
+    axisMaxValues: number[] = [];
+
     /** 数值为满格时顶点到中心的距离（像素），仅在未配置 axisNodes 时使用 */
     @property
     radius: number = 120;
@@ -79,7 +87,7 @@ export class UIRadarChart extends Component {
     @property
     previewInEditor: boolean = true;
 
-    /** 编辑器预览用的归一化数值，按下标与轴一一对应，只在编辑器里生效 */
+    /** 编辑器预览用的原始数值，按下标与轴一一对应，同样按 axisMaxValues 归一化，只在编辑器里生效 */
     @property([CCFloat])
     previewValues: number[] = [];
 
@@ -113,13 +121,15 @@ export class UIRadarChart extends Component {
 
         this.validateAxisNodes();
         this.validateAxisKeys();
+        this.validateAxisMaxValues();
         this.validateAxisOrder();
     }
 
     /**
      * 设置各轴数值并重新绘制，动画从当前显示的形状过渡到新数值。
-     * @param values 归一化数值数组，超出 0~1 的部分会被钳制；配置了 axisNodes 时按下标与节点
-     *               一一对应，缺失的下标按 0 处理，未配置 axisNodes 时数组长度即轴数量
+     * @param values 各轴原始数值，按 axisMaxValues 里对应的上限归一化，超出上限的部分顶格；
+     *               配置了 axisNodes 时按下标与节点一一对应，缺失的下标按 0 处理，
+     *               未配置 axisNodes 时数组长度即轴数量
      * @param animated 是否播放过渡动画（默认 true），首次设置时表现为由中心向外展开
      */
     public setValues(values: ReadonlyArray<number>, animated: boolean = true): void {
@@ -130,9 +140,19 @@ export class UIRadarChart extends Component {
 
         // 先按当前进度快照出正在显示的形状，作为新动画的起点
         this.fromValues = this.snapshotCurrentValues(values.length);
-        this.toValues = values.map((value) => this.clampValue(value));
+        this.toValues = values.map((value, index) => this.normalizeValue(value, index));
         this.animProgress = animated && this.animDuration > 0 ? 0 : 1;
+
         this.redraw();
+    }
+
+    /**
+     * 运行时覆盖各轴满格上限，按下标与 axisNodes 一一对应，
+     * 上限只影响之后的 setValues，不会重绘当前形状。
+     * @param maxValues 各轴满格上限，<= 0 的轴按上限 1 处理
+     */
+    public setAxisMaxValues(maxValues: ReadonlyArray<number>): void {
+        this.axisMaxValues = maxValues.slice();
     }
 
     /**
@@ -184,7 +204,7 @@ export class UIRadarChart extends Component {
 
         // 编辑器每帧都会走到这里，参数没变时跳过重绘，避免无意义的顶点重建
         const signature = [
-            this.previewValues.join(","),
+            this.previewValues.join(","), this.axisMaxValues.join(","),
             this.centerNode?.isValid ? `${this.centerNode.position.x},${this.centerNode.position.y}` : "-",
             this.axisNodes.map((axisNode) => axisNode?.isValid ? `${axisNode.position.x},${axisNode.position.y}` : "-").join(";"),
             this.fillColor.toHEX(), this.strokeColor.toHEX(), this.glowColor.toHEX(),
@@ -196,7 +216,7 @@ export class UIRadarChart extends Component {
         }
 
         this.previewSignature = signature;
-        this.fromValues = this.previewValues.map((value) => this.clampValue(value));
+        this.fromValues = this.previewValues.map((value, index) => this.normalizeValue(value, index));
         this.toValues = this.fromValues;
         this.animProgress = 1;
         this.redraw();
@@ -311,6 +331,17 @@ export class UIRadarChart extends Component {
         return snapshot;
     }
 
+    /** 按该轴的满格上限把原始数值归一化到 0~1 */
+    private normalizeValue(value: number, index: number): number {
+        return this.clampValue(value / this.calcAxisMax(index));
+    }
+
+    /** 取某个轴的满格上限，未配置或非法时按 1 处理（即传入值已归一化） */
+    private calcAxisMax(index: number): number {
+        const axisMax = this.axisMaxValues[index];
+        return axisMax > 0 ? axisMax : 1;
+    }
+
     /** 把数值钳制到 0~1，非法值按 0 处理 */
     private clampValue(value: number): number {
         return Math.min(1, Math.max(0, value || 0));
@@ -338,6 +369,14 @@ export class UIRadarChart extends Component {
         if (this.axisKeys.length > 0 && this.axisNodes.length > 0 && this.axisKeys.length !== this.axisNodes.length) {
             console.warn(`[UIRadarChart] ${this.node.name} 配置了 ${this.axisKeys.length} 个轴名字，`
                 + `但有 ${this.axisNodes.length} 个轴节点，两者应一一对应。`);
+        }
+    }
+
+    /** 检查轴满格上限数量是否与轴节点数量对齐 */
+    private validateAxisMaxValues(): void {
+        if (this.axisMaxValues.length > 0 && this.axisNodes.length > 0 && this.axisMaxValues.length !== this.axisNodes.length) {
+            console.warn(`[UIRadarChart] ${this.node.name} 配置了 ${this.axisMaxValues.length} 个轴上限，`
+                + `但有 ${this.axisNodes.length} 个轴节点，缺失的轴会按上限 1 处理。`);
         }
     }
 
