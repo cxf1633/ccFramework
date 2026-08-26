@@ -92,9 +92,17 @@ Game -> UI -> PopUp -> Dialog -> Toast -> System -> Guide
 更新颜色，不会修改共享材质，也不会在运行时逐帧刷新材质属性。
 
 `ui/components/UIRadarChart.ts` 依赖同节点的 `Graphics`，按传入的归一化数值绘制雷达图的
-多边形数据区域：数组长度即轴数量，第一个数值指向 `startAngle` 方向，其余按顺时针排列。
-外层网格、轴线和文字由业务节点用切图和 Label 摆放，组件只画数据区域，通过多层描边叠出发光，
-并支持由中心向外的展开动画。业务侧调用 `setValues(values, animated)` 刷新，`clear()` 清空。
+多边形数据区域。轴的数量和顶点位置由 `axisNodes` 决定：节点数量即多边形边数，每个节点的位置
+代表该轴满格时的顶点，可以直接摆到外层网格切图的顶点上；未配置 `axisNodes` 时退化为按
+`radius` 和 `startAngle` 均分计算。`centerNode` 指定数值为 0 时顶点收缩到的中心点，
+可以直接摆到网格切图的中心上，留空则用组件节点自身的位置。外层网格、轴线和文字由业务节点用切图和 Label 摆放，
+组件只画数据区域，通过多层描边叠出发光，并支持由中心向外的展开动画。
+业务侧调用 `setValues(values, animated)` 刷新，`clear()` 清空。
+配置了 `axisKeys`（按下标与 `axisNodes` 对应）后可以改用 `setValuesByKey(valueMap, animated)`
+按名字传值，避免顺序错位。数值刷新会从当前形状过渡到新形状，首次设置即表现为由中心展开。
+组件带 `@executeInEditMode`，在编辑器里按 `previewValues` 预览数据区域，美术可以直接调
+颜色、描边和发光参数，`previewInEditor` 可关闭预览。`onLoad` 会校验轴节点是否有遗漏、
+轴名字数量是否对齐，以及轴节点是否沿圆周依次排列（顺序错乱会导致多边形自交）。
 
 `UILayer` 继承 `UIBase`，用于完整 UI 界面，并统一管理只在界面显示期间有效的键盘监听和秒级 Label 定时任务：
 
