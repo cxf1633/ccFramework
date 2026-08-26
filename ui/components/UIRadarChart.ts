@@ -1,4 +1,4 @@
-import { _decorator, CCFloat, CCString, Color, Component, Graphics, Node, UITransform, Vec2, Vec3 } from "cc";
+import { _decorator, CCFloat, Color, Component, Graphics, Node, UITransform, Vec2, Vec3 } from "cc";
 import { EDITOR } from "cc/env";
 
 const { ccclass, property, requireComponent, executeInEditMode, playOnFocus } = _decorator;
@@ -9,7 +9,6 @@ const { ccclass, property, requireComponent, executeInEditMode, playOnFocus } = 
  * 只负责绘制数据区域本身，外层网格、轴线和文字由业务节点用切图和 Label 摆放。
  * 传入数值的顺序与轴顺序一一对应：配置了 axisNodes 时按节点顺序，
  * 否则第一个数值指向 startAngle 方向，其余按顺时针依次排列。
- * 配置了 axisKeys 后可以改用 setValuesByKey 按名字传值，避免顺序错位。
  */
 @ccclass("UIRadarChart")
 @requireComponent(Graphics)
@@ -21,7 +20,7 @@ export class UIRadarChart extends Component {
      * 可以直接摆到外层网格切图的中心上，节点挂在任意父节点下都可以；
      * 留空时中心就是组件所在节点自身的位置。
      */
-    @property(Node)
+    @property({ type: Node, tooltip: "中心定位节点：各轴数值为 0 时顶点收缩到这里，留空则用本节点自身位置" })
     centerNode: Node = null;
 
     /**
@@ -29,68 +28,61 @@ export class UIRadarChart extends Component {
      * 每个节点的位置代表该轴数值为满格时的顶点位置，可直接摆到外层网格切图的顶点上，
      * 节点挂在任意父节点下都可以。配置了该列表时忽略 radius 和 startAngle。
      */
-    @property([Node])
+    @property({ type: [Node], tooltip: "各轴顶点定位节点：数量即多边形边数，位置即该轴满格顶点，需沿圆周依次拖入，顺序与传入数值一一对应" })
     axisNodes: Node[] = [];
 
-    /**
-     * 各轴名字，按下标与 axisNodes 一一对应，供 setValuesByKey 按名字取值使用。
-     * 留空表示只用下标对应，此时 setValuesByKey 不可用。
-     */
-    @property([CCString])
-    axisKeys: string[] = [];
-
-    /**
-     * 各轴满格上限，按下标与 axisNodes 一一对应，业务侧直接传原始数值，
-     * 组件用 数值 / 上限 归一化。留空或某轴上限 <= 0 时该轴按上限 1 处理，
-     * 即认为业务传进来的已经是 0~1 的归一化数值。
-     */
-    @property([CCFloat])
-    axisMaxValues: number[] = [];
-
     /** 数值为满格时顶点到中心的距离（像素），仅在未配置 axisNodes 时使用 */
-    @property
+    @property({ tooltip: "满格半径（像素）：数值满格时顶点到中心的距离，仅在未配置轴节点时使用" })
     radius: number = 120;
 
     /** 第一个轴的角度（度），90 表示第一个轴指向正上方，仅在未配置 axisNodes 时使用 */
-    @property
+    @property({ tooltip: "起始角度（度）：第一个轴的朝向，90 为正上方，其余轴顺时针均分，仅在未配置轴节点时使用" })
     startAngle: number = 90;
 
     /** 数据区域填充颜色 */
-    @property(Color)
+    @property({ type: Color, tooltip: "数据区域填充颜色，alpha 越低越透" })
     fillColor: Color = new Color(31, 214, 232, 90);
 
     /** 数据区域描边颜色 */
-    @property(Color)
+    @property({ type: Color, tooltip: "数据区域描边颜色" })
     strokeColor: Color = new Color(120, 246, 255, 255);
 
     /** 外发光颜色，alpha 越低发光越弱 */
-    @property(Color)
+    @property({ type: Color, tooltip: "外发光颜色：alpha 越低发光越弱" })
     glowColor: Color = new Color(120, 246, 255, 70);
 
     /** 描边宽度（像素） */
-    @property
+    @property({ tooltip: "描边宽度（像素）" })
     strokeWidth: number = 2;
 
     /** 外发光在描边之外额外扩散的宽度（像素） */
-    @property
+    @property({ tooltip: "外发光宽度（像素）：在描边之外额外扩散的宽度" })
     glowWidth: number = 8;
 
     /** 外发光层数，层数越多过渡越柔和，0 表示不绘制外发光 */
-    @property
+    @property({ tooltip: "外发光层数：层数越多过渡越柔和，也越费一点绘制，0 表示不画发光" })
     glowLayers: number = 2;
 
     /** 数值变化动画时长（秒），0 表示直接显示最终形状 */
-    @property
+    @property({ tooltip: "动画时长（秒）：数值变化的过渡时间，0 表示直接显示最终形状" })
     animDuration: number = 0.35;
 
     /** 是否在编辑器里按 previewValues 预览数据区域，方便美术调颜色和发光参数 */
-    @property
+    @property({ tooltip: "编辑器预览开关：开启后按下面的预览数值画出数据区域，只影响编辑器，不影响运行时" })
     previewInEditor: boolean = true;
 
-    /** 编辑器预览用的原始数值，按下标与轴一一对应，同样按 axisMaxValues 归一化，只在编辑器里生效 */
-    @property([CCFloat])
+    /**
+     * 编辑器预览用的数值，按下标与轴一一对应，只在编辑器里生效。
+     * 编辑器里没有业务侧传入的满格上限，所以这里直接填 0~1 的归一化数值。
+     */
+    @property({ type: [CCFloat], tooltip: "编辑器预览数值：按下标与轴节点对应，直接填 0~1 的归一化数值，只在编辑器里生效" })
     previewValues: number[] = [];
 
+    /**
+     * 各轴满格上限，按下标与 axisNodes 一一对应，由业务侧通过 setAxisMaxValues 传入。
+     * 未传或某轴上限 <= 0 时该轴按上限 1 处理，即认为业务传进来的已经是 0~1 的归一化数值。
+     */
+    private axisMaxValues: number[] = [];
     private graphics: Graphics = null;
     private uiTransform: UITransform = null;
     /** 动画起点的各轴归一化数值，范围 0~1 */
@@ -120,8 +112,6 @@ export class UIRadarChart extends Component {
         this.graphics.lineCap = Graphics.LineCap.ROUND;
 
         this.validateAxisNodes();
-        this.validateAxisKeys();
-        this.validateAxisMaxValues();
         this.validateAxisOrder();
     }
 
@@ -152,21 +142,12 @@ export class UIRadarChart extends Component {
      * @param maxValues 各轴满格上限，<= 0 的轴按上限 1 处理
      */
     public setAxisMaxValues(maxValues: ReadonlyArray<number>): void {
-        this.axisMaxValues = maxValues.slice();
-    }
-
-    /**
-     * 按轴名字设置各轴数值，需要先在 axisKeys 里配置好各轴名字。
-     * @param values 轴名字到归一化数值的映射，缺失的轴按 0 处理
-     * @param animated 是否播放过渡动画（默认 true）
-     */
-    public setValuesByKey(values: Readonly<Record<string, number>>, animated: boolean = true): void {
-        if (this.axisKeys.length === 0) {
-            console.warn(`[UIRadarChart] ${this.node.name} 未配置 axisKeys，无法按名字设置数值。`);
-            return;
+        if (this.axisNodes.length > 0 && maxValues.length !== this.axisNodes.length) {
+            console.warn(`[UIRadarChart] ${this.node.name} 传入 ${maxValues.length} 个轴上限，`
+                + `但有 ${this.axisNodes.length} 个轴节点，缺失的轴会按上限 1 处理。`);
         }
 
-        this.setValues(this.axisKeys.map((axisKey) => values?.[axisKey] ?? 0), animated);
+        this.axisMaxValues = maxValues.slice();
     }
 
     /** 清空已绘制的数据区域和数值，界面复用时可避免残留上一份数据 */
@@ -204,7 +185,7 @@ export class UIRadarChart extends Component {
 
         // 编辑器每帧都会走到这里，参数没变时跳过重绘，避免无意义的顶点重建
         const signature = [
-            this.previewValues.join(","), this.axisMaxValues.join(","),
+            this.previewValues.join(","),
             this.centerNode?.isValid ? `${this.centerNode.position.x},${this.centerNode.position.y}` : "-",
             this.axisNodes.map((axisNode) => axisNode?.isValid ? `${axisNode.position.x},${axisNode.position.y}` : "-").join(";"),
             this.fillColor.toHEX(), this.strokeColor.toHEX(), this.glowColor.toHEX(),
@@ -361,22 +342,6 @@ export class UIRadarChart extends Component {
         const missingCount = this.axisNodes.filter((axisNode) => !axisNode?.isValid).length;
         if (missingCount > 0) {
             console.warn(`[UIRadarChart] ${this.node.name} 有 ${missingCount} 个轴定位节点未配置，这些轴会画在中心点。`);
-        }
-    }
-
-    /** 检查轴名字数量是否与轴节点数量对齐 */
-    private validateAxisKeys(): void {
-        if (this.axisKeys.length > 0 && this.axisNodes.length > 0 && this.axisKeys.length !== this.axisNodes.length) {
-            console.warn(`[UIRadarChart] ${this.node.name} 配置了 ${this.axisKeys.length} 个轴名字，`
-                + `但有 ${this.axisNodes.length} 个轴节点，两者应一一对应。`);
-        }
-    }
-
-    /** 检查轴满格上限数量是否与轴节点数量对齐 */
-    private validateAxisMaxValues(): void {
-        if (this.axisMaxValues.length > 0 && this.axisNodes.length > 0 && this.axisMaxValues.length !== this.axisNodes.length) {
-            console.warn(`[UIRadarChart] ${this.node.name} 配置了 ${this.axisMaxValues.length} 个轴上限，`
-                + `但有 ${this.axisNodes.length} 个轴节点，缺失的轴会按上限 1 处理。`);
         }
     }
 

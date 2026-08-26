@@ -98,13 +98,15 @@ Game -> UI -> PopUp -> Dialog -> Toast -> System -> Guide
 可以直接摆到网格切图的中心上，留空则用组件节点自身的位置。外层网格、轴线和文字由业务节点用切图和 Label 摆放，
 组件只画数据区域，通过多层描边叠出发光，并支持由中心向外的展开动画。
 业务侧调用 `setValues(values, animated)` 刷新，`clear()` 清空。传入的是各轴原始数值，
-组件按 `axisMaxValues`（按下标与 `axisNodes` 对应，也可运行时用 `setAxisMaxValues` 覆盖）
-的满格上限归一化，超出上限的部分顶格，某轴上限留空或 <= 0 时按 1 处理，即认为传入值已归一化。
-配置了 `axisKeys`（按下标与 `axisNodes` 对应）后可以改用 `setValuesByKey(valueMap, animated)`
-按名字传值，避免顺序错位。数值刷新会从当前形状过渡到新形状，首次设置即表现为由中心展开。
+组件按业务侧通过 `setAxisMaxValues(maxValues)` 传入的满格上限（按下标与 `axisNodes` 对应）
+归一化，超出上限的部分顶格，某轴上限留空或 <= 0 时按 1 处理，即认为传入值已归一化。
+数值的下标与 `axisNodes` 的下标一一对应，顺序由业务侧传入的数组保证。
+数值刷新会从当前形状过渡到新形状，首次设置即表现为由中心展开。
+满格上限不在 Inspector 里配置，只能由业务侧传入；编辑器预览的 `previewValues` 因此直接填 0~1 的归一化数值。
 组件带 `@executeInEditMode`，在编辑器里按 `previewValues` 预览数据区域，美术可以直接调
-颜色、描边和发光参数，`previewInEditor` 可关闭预览。`onLoad` 会校验轴节点是否有遗漏、
-轴名字数量是否对齐，以及轴节点是否沿圆周依次排列（顺序错乱会导致多边形自交）。
+颜色、描边和发光参数，`previewInEditor` 可关闭预览。`onLoad` 会校验轴节点是否有遗漏，
+以及轴节点是否沿圆周依次排列（顺序错乱会导致多边形自交）；轴上限数量与轴节点不一致时，
+`setAxisMaxValues` 会输出警告。
 
 `UILayer` 继承 `UIBase`，用于完整 UI 界面，并统一管理只在界面显示期间有效的键盘监听和秒级 Label 定时任务：
 
