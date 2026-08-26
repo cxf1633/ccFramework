@@ -91,6 +91,11 @@ Game -> UI -> PopUp -> Dialog -> Toast -> System -> Guide
 组件启用时为当前渲染器创建独立材质实例，业务代码可通过 `setColors(startColor, endColor)`
 更新颜色，不会修改共享材质，也不会在运行时逐帧刷新材质属性。
 
+`ui/components/UIRadarChart.ts` 依赖同节点的 `Graphics`，按传入的归一化数值绘制雷达图的
+多边形数据区域：数组长度即轴数量，第一个数值指向 `startAngle` 方向，其余按顺时针排列。
+外层网格、轴线和文字由业务节点用切图和 Label 摆放，组件只画数据区域，通过多层描边叠出发光，
+并支持由中心向外的展开动画。业务侧调用 `setValues(values, animated)` 刷新，`clear()` 清空。
+
 `UILayer` 继承 `UIBase`，用于完整 UI 界面，并统一管理只在界面显示期间有效的键盘监听和秒级 Label 定时任务：
 
 - 键盘事件开关：`setKeyboard(true | false)`。
