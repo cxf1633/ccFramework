@@ -32,7 +32,7 @@ export class UIGradient extends Component {
         this.refresh();
     }
 
-    @property({ type: Color, serializable: true })
+    @property({ serializable: true })
     private _startColor: Color = new Color(255, 255, 255, 255);
 
     @property({ type: Color, displayName: "起始颜色" })
@@ -45,7 +45,7 @@ export class UIGradient extends Component {
         this.refreshProperties();
     }
 
-    @property({ type: Color, serializable: true })
+    @property({ serializable: true })
     private _endColor: Color = new Color(255, 255, 255, 255);
 
     @property({ type: Color, displayName: "结束颜色" })

@@ -40,15 +40,15 @@ export class UIRadarChart extends Component {
     startAngle: number = 90;
 
     /** 数据区域填充颜色 */
-    @property({ type: Color, tooltip: "数据区域填充颜色，alpha 越低越透" })
+    @property({ tooltip: "数据区域填充颜色，alpha 越低越透" })
     fillColor: Color = new Color(31, 214, 232, 90);
 
     /** 数据区域描边颜色 */
-    @property({ type: Color, tooltip: "数据区域描边颜色" })
+    @property({ tooltip: "数据区域描边颜色" })
     strokeColor: Color = new Color(120, 246, 255, 255);
 
     /** 外发光颜色，alpha 越低发光越弱 */
-    @property({ type: Color, tooltip: "外发光颜色：alpha 越低发光越弱" })
+    @property({ tooltip: "外发光颜色：alpha 越低发光越弱" })
     glowColor: Color = new Color(120, 246, 255, 70);
 
     /** 描边宽度（像素） */
@@ -66,6 +66,13 @@ export class UIRadarChart extends Component {
     /** 数值变化动画时长（秒），0 表示直接显示最终形状 */
     @property({ tooltip: "动画时长（秒）：数值变化的过渡时间，0 表示直接显示最终形状" })
     animDuration: number = 0.35;
+
+    /**
+     * 是否在节点每次由隐藏变为显示时，把当前数值从中心重新展开一遍。
+     * 页签切换这类只切 active 的场景不需要业务侧再调一次 setValues。
+     */
+    @property({ tooltip: "每次显示时重播动画：节点由隐藏变为显示时，把当前数值从中心重新展开一遍" })
+    replayOnEnable: boolean = true;
 
     /** 是否在编辑器里按 previewValues 预览数据区域，方便美术调颜色和发光参数 */
     @property({ tooltip: "编辑器预览开关：开启后按下面的预览数值画出数据区域，只影响编辑器，不影响运行时" })
@@ -113,6 +120,28 @@ export class UIRadarChart extends Component {
 
         this.validateAxisNodes();
         this.validateAxisOrder();
+    }
+
+    protected onEnable(): void {
+        if (EDITOR || !this.replayOnEnable) {
+            return;
+        }
+
+        this.replay();
+    }
+
+    /**
+     * 从中心重新展开一遍当前数值，数值本身不变。
+     * 没有数值或动画时长为 0 时不做处理。
+     */
+    public replay(): void {
+        if (this.toValues.length === 0 || this.animDuration <= 0) {
+            return;
+        }
+
+        this.fromValues = this.toValues.map(() => 0);
+        this.animProgress = 0;
+        this.redraw();
     }
 
     /**

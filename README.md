@@ -102,6 +102,8 @@ Game -> UI -> PopUp -> Dialog -> Toast -> System -> Guide
 归一化，超出上限的部分顶格，某轴上限留空或 <= 0 时按 1 处理，即认为传入值已归一化。
 数值的下标与 `axisNodes` 的下标一一对应，顺序由业务侧传入的数组保证。
 数值刷新会从当前形状过渡到新形状，首次设置即表现为由中心展开。
+`replayOnEnable` 默认开启，节点每次由隐藏变为显示时会把当前数值从中心重新展开一遍，
+页签切换这类只切 `active` 的场景不需要业务侧再调一次 `setValues`；也可以手动调 `replay()` 重播。
 满格上限不在 Inspector 里配置，只能由业务侧传入；编辑器预览的 `previewValues` 因此直接填 0~1 的归一化数值。
 组件带 `@executeInEditMode`，在编辑器里按 `previewValues` 预览数据区域，美术可以直接调
 颜色、描边和发光参数，`previewInEditor` 可关闭预览。`onLoad` 会校验轴节点是否有遗漏，
