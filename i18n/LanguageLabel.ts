@@ -6,10 +6,16 @@ const { ccclass, property, menu } = _decorator;
 
 @ccclass("LangLabelParamsItem")
 export class LangLabelParamsItem {
-    @property
+    @property({
+        displayName: "参数名",
+        tooltip: "多语言文本中的占位参数名。例如文本包含 %{name} 时，此处填写 name。",
+    })
     key: string = "";
 
-    @property
+    @property({
+        displayName: "替换值",
+        tooltip: "运行时用于替换对应占位参数的文本内容。",
+    })
     value: string = "";
 }
 
@@ -26,13 +32,15 @@ Enum(LanguageLabelFirstLetterCase);
 export class LanguageLabel extends Component {
     @property({
         type: LangLabelParamsItem,
-        displayName: "params",
+        displayName: "替换参数",
+        tooltip: "多语言文本的占位参数列表，用于替换 %{参数名} 格式的内容。",
     })
     private _params: Array<LangLabelParamsItem> = [];
 
     @property({
         type: LangLabelParamsItem,
-        displayName: "params",
+        displayName: "替换参数",
+        tooltip: "多语言文本的占位参数列表，用于替换 %{参数名} 格式的内容。",
     })
     public set params(value: Array<LangLabelParamsItem>) {
         this._params = value;
@@ -48,7 +56,12 @@ export class LanguageLabel extends Component {
     @property({ serializable: true })
     private _dataID: string = "";
 
-    @property({ type: CCString, serializable: true })
+    @property({
+        type: CCString,
+        serializable: true,
+        displayName: "文本资源标识",
+        tooltip: "多语言 JSON 中对应文本的键名。例如填写 Main_Start，会读取当前语言配置中的 Main_Start。",
+    })
     public get dataID(): string {
         return this._dataID || "";
     }
@@ -63,6 +76,7 @@ export class LanguageLabel extends Component {
     @property({
         type: LanguageLabelFirstLetterCase,
         displayName: "首字母处理",
+        tooltip: "Original 保持原样，Upper 将首字母转为大写，Lower 将首字母转为小写。",
     })
     public firstLetterCase: LanguageLabelFirstLetterCase = LanguageLabelFirstLetterCase.Original;
 

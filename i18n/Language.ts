@@ -47,10 +47,10 @@ export class LanguageManager extends Singleton {
             return;
         }
 
-        this.loadJson(nextLanguage).then((loaded) => {
+        this.loadLanguageAssets(nextLanguage).then((loaded) => {
             if (!loaded && nextLanguage !== this._defaultLanguage) {
                 console.log(`[${nextLanguage}] language json is missing, set default language [${this._defaultLanguage}] automatically.`);
-                this.loadJson(this._defaultLanguage).then(() => this.applyLanguage(this._defaultLanguage, callback));
+                this.loadLanguageAssets(this._defaultLanguage).then(() => this.applyLanguage(this._defaultLanguage, callback));
                 return;
             }
 
@@ -98,6 +98,17 @@ export class LanguageManager extends Singleton {
         }
 
         return normalized;
+    }
+
+    private async loadLanguageAssets(language: string): Promise<boolean> {
+        const loaded = await this.loadJson(language);
+        if (!loaded) {
+            return false;
+        }
+
+        await this._languagePack.loadTexture(language);
+        await this._languagePack.loadSpine(language);
+        return true;
     }
 
     private applyLanguage(language: string, callback?: (success: boolean) => void): void {

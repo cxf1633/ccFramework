@@ -13,7 +13,13 @@ export class LanguageSprite extends Component {
     @property({ serializable: true })
     private _dataID: string = "";
 
-    @property({ type: CCString, serializable: true, readonly: true })
+    @property({
+        type: CCString,
+        serializable: true,
+        readonly: true,
+        displayName: "图片资源标识",
+        tooltip: "当前多语言图片的资源名称；在编辑器中设置 SpriteFrame 后会自动记录，无需手动填写。",
+    })
     public get dataID(): string {
         return this._dataID || "";
     }
@@ -25,8 +31,11 @@ export class LanguageSprite extends Component {
         }
     }
 
-    @property
-    private isRawSize: boolean = true;
+    @property({
+        displayName: "使用图片原始尺寸",
+        tooltip: "启用后，切换语言图片时会将节点尺寸同步为 SpriteFrame 的原始尺寸；关闭则保留当前节点尺寸。",
+    })
+    private isRawSize: boolean = false;
 
     @property({ visible: false })
     private resUuid: string = "";
