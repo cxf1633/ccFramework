@@ -60,20 +60,25 @@ export class TimeUtils {
      *
      * @param time Date，或秒 / 毫秒级时间戳（自动归一化）。
      * @param pattern 支持 yyyy / yy / MM / dd / hh / mm / ss / ms，默认 "yyyy-MM-dd hh:mm:ss"。
+     *                其中 MM / dd 补零，M / d 不补零（如 "yyyy-M-d" 得到 2026-9-2）。
      */
     public static formatDate(time: Date | number, pattern = "yyyy-MM-dd hh:mm:ss"): string {
         const date = time instanceof Date ? time : new Date(this.toSeconds(time) * 1000);
+        const month = date.getMonth() + 1;
+        const day = date.getDate();
         const tokens: Record<string, string> = {
             yyyy: String(date.getFullYear()),
             yy: String(date.getFullYear()).slice(-2),
-            MM: this.pad2(date.getMonth() + 1),
-            dd: this.pad2(date.getDate()),
+            MM: this.pad2(month),
+            dd: this.pad2(day),
+            M: String(month),
+            d: String(day),
             hh: this.pad2(date.getHours()),
             mm: this.pad2(date.getMinutes()),
             ss: this.pad2(date.getSeconds()),
             ms: this.pad3(date.getMilliseconds()),
         };
-        return pattern.replace(/yyyy|yy|MM|dd|hh|mm|ss|ms/g, (token) => tokens[token]);
+        return pattern.replace(/yyyy|yy|MM|dd|hh|mm|ss|ms|M|d/g, (token) => tokens[token]);
     }
 
     /**
