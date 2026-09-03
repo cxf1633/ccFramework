@@ -73,6 +73,26 @@ export class LanguageLabel extends Component {
         }
     }
 
+    @property({ serializable: true })
+    private _suffix: string = "";
+
+    @property({
+        type: CCString,
+        serializable: true,
+        displayName: "追加后缀",
+        tooltip: "拼接在多语言文本末尾的固定内容，例如冒号。同一个文本资源标识在不同界面需要 人数 / 人数： 两种写法时，改这里即可，不用新增语言表条目。",
+    })
+    public get suffix(): string {
+        return this._suffix || "";
+    }
+
+    public set suffix(value: string) {
+        this._suffix = value;
+        if (!EDITOR) {
+            this._needUpdate = true;
+        }
+    }
+
     @property({
         type: LanguageLabelFirstLetterCase,
         displayName: "首字母处理",
@@ -89,7 +109,7 @@ export class LanguageLabel extends Component {
             warn("[LanguageLabel] no language found, using dataID to replace");
             value = this._dataID;
         }
-        return this.applyFirstLetterCase(value);
+        return this.applyFirstLetterCase(value) + this.suffix;
     }
 
     public language(): void {
