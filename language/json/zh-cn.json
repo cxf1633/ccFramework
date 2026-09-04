@@ -20,5 +20,15 @@
     "SYSTEM_3": "检测到您仍在房间中",
     "SYSTEM_4": "超时",
     "SYSTEM_5": "连续两次超时，请休息一下。",
-    "SYSTEM_6": "连续两次超时，请休息一下。"
+    "LOGIN_APPLE": "通过 Apple 登录",
+    "LOGIN_PHONE": "手机登录",
+    "LOGIN_WECHAT": "微信登录",
+    "LOGIN_GUEST": "游客登录",
+    "LOGIN_AGREEMENT_TIP": "登录即表示您已阅读并同意",
+    "AND": "和",
+    "USER_AGREEMENT": "用户协议",
+    "PRIVACY_POLICY": "隐私政策",
+    "SERVICE_TERMS": "服务条款",
+    "HEALTHY_GAME_ADVICE_PART1": "抵制不良游戏，拒绝盗版游戏。注意自我保护，谨防受骗上当。适度游戏益脑，沉迷游戏伤身。合理安排时间，享受健康生活。",
+    "HEALTHY_GAME_ADVICE_PART2": "批准文号:新厂出审[2017]4343号。出版物号:ISBN978-7-7979-7728-9 出版单位:福州169公司。"
 }

@@ -20,5 +20,15 @@
     "SYSTEM_3": "We have detected that you are still in the room",
     "SYSTEM_4": "TIME OUT",
     "SYSTEM_5": "Two consecutive timeouts, let's take a break.",
-    "SYSTEM_6": "Two consecutive timeouts, let's take a break."
+    "LOGIN_APPLE": "Sign in with Apple",
+    "LOGIN_PHONE": "Sign in with Phone",
+    "LOGIN_WECHAT": "Sign in with WeChat",
+    "LOGIN_GUEST": "Guest Login",
+    "LOGIN_AGREEMENT_TIP": "By logging in, you confirm you have read and agree to",
+    "AND": "And",
+    "USER_AGREEMENT": "User Agreement",
+    "PRIVACY_POLICY": "Privacy Policy",
+    "SERVICE_TERMS": "Terms of Service",
+    "HEALTHY_GAME_ADVICE_PART1": "Resist bad games, reject pirated games. Protect yourself and watch out for scams. Moderate gaming benefits your mind, while excessive gaming harms your health. Arrange your time wisely and enjoy a healthy life.",
+    "HEALTHY_GAME_ADVICE_PART2": "Approval Number: Xin Chang Chu Shen [2017] No. 4343 Publication Number: ISBN 978-7-7979-7728-9 Publisher: Fuzhou 169 Company"
 }

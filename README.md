@@ -91,6 +91,16 @@ Game -> UI -> PopUp -> Dialog -> Toast -> System -> Guide
 组件启用时为当前渲染器创建独立材质实例，业务代码可通过 `setColors(startColor, endColor)`
 更新颜色，不会修改共享材质，也不会在运行时逐帧刷新材质属性。
 
+`ui/materials/edge-fade/` 提供**双边渐隐**材质：中间完全显示，两侧平滑过渡到全透明，
+用来替代 `Mask` 做「内容到边界淡出」。原因是 `Mask` 走 stencil 模板测试，每个像素只有
+通过/丢弃两种结果，边缘一定是硬边，改材质也无法软化。预设材质 `mat-edge-fade-h`（左右渐隐）
+与 `mat-edge-fade-v`（上下渐隐）直接拖到 Sprite/Label 的 `CustomMaterial` 槽位即可，
+参数全部在 Inspector 调整，不需要写脚本：`edgeSoftness` 为两侧渐隐宽度占比（0 关闭，最大 0.5），
+`fadeDirection` 0 为上下 / 1 为左右，`uvRect` 为图集内 UV 范围（单图保持 0,0,1,1）。
+两个限制：材质是共享资源，多个节点需要不同参数时各复制一份；渐隐按**每个渲染器自身的 UV**
+计算，挂到多个子节点上会变成各自渐隐，要让一组子节点整体渐隐需先渲染到 RenderTexture
+再对该 RT 应用此材质（此时在材质 Defines 中勾选 `SAMPLE_FROM_RT` 修正上下翻转）。
+
 `ui/components/UIRadarChart.ts` 依赖同节点的 `Graphics`，按传入的归一化数值绘制雷达图的
 多边形数据区域。轴的数量和顶点位置由 `axisNodes` 决定：节点数量即多边形边数，每个节点的位置
 代表该轴满格时的顶点，可以直接摆到外层网格切图的顶点上；未配置 `axisNodes` 时退化为按
