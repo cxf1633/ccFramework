@@ -228,6 +228,7 @@ export class AudioManager {
         }
 
         const source = this.hostNode.addComponent(AudioSource);
+        source.playOnAwake = false;
         const channel: AudioChannel = {
             source,
             clip: null,
@@ -245,6 +246,7 @@ export class AudioManager {
         }
 
         const source = this.hostNode.addComponent(AudioSource);
+        source.playOnAwake = false;
         source.clip = clip;
         source.loop = false;
         source.volume = volume;

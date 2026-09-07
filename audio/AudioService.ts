@@ -111,6 +111,7 @@ export class AudioService {
             return;
         }
 
+        // Logger.log(`[AudioService] 播放音乐: ${path.substring(path.lastIndexOf('/') + 1)}`);
         const playbackVolume = this.getMusicPlaybackVolume(volume);
         this.nativeAudio.setSource(MUSIC_CHANNEL, clip, { loop, volume: playbackVolume });
         this.nativeAudio.play(MUSIC_CHANNEL, { loop, volume: playbackVolume, restart: true });
@@ -118,6 +119,7 @@ export class AudioService {
 
     /** 停止当前背景音乐，并取消尚未完成的异步音乐播放请求。 */
     public stopMusic(): void {
+        // Logger.log('[AudioService] 停止音乐');
         this.musicPlayVersion++;
         this.nativeAudio.stop(MUSIC_CHANNEL);
     }
