@@ -37,6 +37,7 @@ export class AudioManager {
     private hostNode: Node | null = null;
     private readonly channels: Map<AudioChannelId, AudioChannel> = new Map();
     private readonly nativeAudioPool: WeChatAudioContextRecord[] = [];
+    private readonly independentSources: Set<AudioSource> = new Set();
 
     public initialize(hostNode: Node): void {
         if (this.hostNode === hostNode) return;
@@ -181,10 +182,20 @@ export class AudioManager {
         return channel.source.playing;
     }
 
-    public playOneShot(clip: AudioClip, volume: number = 1, backend: AudioBackend = "auto"): void {
+    public playOneShot(
+        clip: AudioClip,
+        volume: number = 1,
+        backend: AudioBackend = "auto",
+        uninterrupted: boolean = false,
+    ): void {
         const finalVolume = this.normalizeVolume(volume);
         if (backend === "native" || backend === "auto" && this.shouldUseNativeAudio()) {
             this.playNativeClip(clip, finalVolume, false);
+            return;
+        }
+
+        if (uninterrupted) {
+            this.playIndependentCocosClip(clip, finalVolume);
             return;
         }
 
@@ -197,6 +208,7 @@ export class AudioManager {
             this.stopNativeChannel(channel);
             channel.source.stop();
         });
+        this.independentSources.forEach((source) => this.releaseIndependentSource(source));
     }
 
     public dispose(): void {
@@ -225,6 +237,33 @@ export class AudioManager {
         };
         this.channels.set(channelId, channel);
         return channel;
+    }
+
+    private playIndependentCocosClip(clip: AudioClip, volume: number): void {
+        if (!this.hostNode) {
+            throw new Error("AudioManager must be initialized before playing audio.");
+        }
+
+        const source = this.hostNode.addComponent(AudioSource);
+        source.clip = clip;
+        source.loop = false;
+        source.volume = volume;
+        this.independentSources.add(source);
+        source.play();
+        source.scheduleOnce(
+            () => this.releaseIndependentSource(source),
+            Math.max(0, clip.getDuration()) + 0.1,
+        );
+    }
+
+    private releaseIndependentSource(source: AudioSource): void {
+        this.independentSources.delete(source);
+        if (!source?.isValid) {
+            return;
+        }
+
+        source.stop();
+        source.destroy();
     }
 
     private playNativeChannel(channel: AudioChannel, restart: boolean): void {

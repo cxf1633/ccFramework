@@ -6,6 +6,11 @@ import { AudioManager } from "./AudioManager";
 
 export type AudioType = "music" | "sound";
 
+export interface AudioSoundPlayOptions {
+    /** 使用独立播放器，避免连续播放同一音效时后一次截断前一次。 */
+    uninterrupted?: boolean;
+}
+
 export interface AudioServiceOptions {
     defaultClickSound?: string;
     preloadResources?: readonly string[];
@@ -31,6 +36,7 @@ export class AudioService {
     private soundMuted: boolean = false;
     private musicVolume: number = 1;
     private soundVolume: number = 1;
+    private musicPlayVersion: number = 0;
 
     public constructor(private readonly res: ResManager) { }
 
@@ -60,6 +66,7 @@ export class AudioService {
 
     /** 释放播放器、缓存和 UIButton 音效桥接。 */
     public dispose(): void {
+        this.musicPlayVersion++;
         UIButton.setClickSoundPlayer(null);
         this.nativeAudio.dispose();
         this.resourceAudioClips.clear();
@@ -86,23 +93,49 @@ export class AudioService {
     }
 
     /** 播放指定 Bundle 内的音效。 */
-    public async playSound(bundleName: string, path: string, volume: number = 1): Promise<void> {
+    public async playSound(
+        bundleName: string,
+        path: string,
+        volume: number = 1,
+        options: AudioSoundPlayOptions = {},
+    ): Promise<void> {
         const clip = await this.loadBundleAudio(bundleName, path);
-        this.playSoundClip(clip, volume, path);
+        this.playSoundClip(clip, volume, path, options);
     }
 
     /** 播放指定 Bundle 内的背景音乐。 */
     public async playMusic(bundleName: string, path: string, loop: boolean = true, volume: number = 1): Promise<void> {
+        const playVersion = ++this.musicPlayVersion;
         const clip = await this.loadBundleAudio(bundleName, path);
+        if (playVersion !== this.musicPlayVersion) {
+            return;
+        }
+
         const playbackVolume = this.getMusicPlaybackVolume(volume);
         this.nativeAudio.setSource(MUSIC_CHANNEL, clip, { loop, volume: playbackVolume });
         this.nativeAudio.play(MUSIC_CHANNEL, { loop, volume: playbackVolume, restart: true });
     }
 
+    /** 停止当前背景音乐，并取消尚未完成的异步音乐播放请求。 */
+    public stopMusic(): void {
+        this.musicPlayVersion++;
+        this.nativeAudio.stop(MUSIC_CHANNEL);
+    }
+
     /** 直接播放已加载的 AudioClip 音效。 */
-    public playSoundClip(clip: AudioClip, volume: number = 1, logName: string = clip.name): void {
-        // Logger.log(`[AudioService] 播放音效: ${logName.substring(logName.lastIndexOf('/') + 1)}`);
-        this.nativeAudio.playOneShot(clip, this.getSoundPlaybackVolume(volume), "auto");
+    public playSoundClip(
+        clip: AudioClip,
+        volume: number = 1,
+        logName: string = clip.name,
+        options: AudioSoundPlayOptions = {},
+    ): void {
+        Logger.log(`[AudioService] 播放音效: ${logName.substring(logName.lastIndexOf('/') + 1)}`);
+        this.nativeAudio.playOneShot(
+            clip,
+            this.getSoundPlaybackVolume(volume),
+            "auto",
+            options.uninterrupted === true,
+        );
     }
 
     /** 设置指定音频类型的静音状态。 */
