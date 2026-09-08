@@ -50,6 +50,9 @@ export class UILayer extends UIBase {
     public btn_close(): void {
         Framework.UIMgr.close(this.node);
     }
+    public btn_mask(): void {
+        Framework.UIMgr.close(this.node);
+    }
 
     /**
      * 键盘事件开关。

@@ -131,7 +131,7 @@ export class AudioService {
         logName: string = clip.name,
         options: AudioSoundPlayOptions = {},
     ): void {
-        Logger.log(`[AudioService] 播放音效: ${logName.substring(logName.lastIndexOf('/') + 1)}`);
+        // Logger.log(`[AudioService] 播放音效: ${logName.substring(logName.lastIndexOf('/') + 1)}`);
         this.nativeAudio.playOneShot(
             clip,
             this.getSoundPlaybackVolume(volume),

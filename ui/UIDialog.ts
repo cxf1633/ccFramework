@@ -44,6 +44,9 @@ export class UIDialog extends UIBase {
     public btn_close(): void {
         Framework.UIMgr.close(this.node);
     }
+    public btn_mask(): void {
+        Framework.UIMgr.close(this.node);
+    }
 
     public async btn_ok(): Promise<void> {
         await this.runDialogAction(this.onDialogConfirm, this.okFunc);
