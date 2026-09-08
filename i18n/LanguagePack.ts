@@ -1,4 +1,4 @@
-import { Asset, AssetManager, assetManager, director, JsonAsset, resources, TTFFont, warn } from "cc";
+import { Asset, AssetManager, assetManager, director, JsonAsset, warn } from "cc";
 import { LanguageData } from "./LanguageData";
 import { LanguageLabel } from "./LanguageLabel";
 import { LanguageSpine } from "./LanguageSpine";
@@ -27,13 +27,13 @@ export class LanguagePack {
 
     public async loadTexture(lang: string): Promise<void> {
         const language = lang.toLowerCase();
-        await this.loadResourcesDir(`${LanguageData.path_texture}/${language}`);
+        await this.loadBusinessBundleDir(language, "texture");
         await this.loadBundleDir(`texture/${language}`);
     }
 
     public async loadSpine(lang: string): Promise<void> {
         const language = lang.toLowerCase();
-        await this.loadResourcesDir(`${LanguageData.path_spine}/${language}`);
+        await this.loadBusinessBundleDir(language, "spine");
         await this.loadBundleDir(`spine/${language}`);
     }
 
@@ -41,7 +41,7 @@ export class LanguagePack {
         const language = lang.toLowerCase();
         const nextJson: Record<string, string> = {};
         let loaded = false;
-        const projectJson = await this.loadResourcesJson(`${LanguageData.path_json}/${language}`);
+        const projectJson = await this.loadBusinessBundleJson(language);
         if (projectJson) {
             Object.assign(nextJson, projectJson);
             loaded = true;
@@ -63,10 +63,11 @@ export class LanguagePack {
         }
 
         const language = lang.toLowerCase();
-        this.releaseDir(resources, `${LanguageData.path_texture}/${language}`);
-        this.releaseDir(resources, `${LanguageData.path_spine}/${language}`);
-        this.releaseAsset(resources.get(`${LanguageData.path_json}/${language}`, JsonAsset));
-        this.releaseAsset(resources.get(`${LanguageData.path_json}/${language}`, TTFFont));
+        const businessBundle = assetManager.getBundle(LanguageData.getBusinessBundleName(language));
+        if (businessBundle) {
+            businessBundle.releaseAll();
+            assetManager.removeBundle(businessBundle);
+        }
 
         const bundle = assetManager.getBundle(LanguageData.bundleName);
         this.releaseDir(bundle, `texture/${language}`);
@@ -74,15 +75,36 @@ export class LanguagePack {
         this.releaseAsset(bundle?.get(`json/${language}`, JsonAsset) || null);
     }
 
-    private loadResourcesJson(path: string): Promise<Record<string, string> | null> {
+    private async loadBusinessBundleJson(language: string): Promise<Record<string, string> | null> {
+        const bundle = await this.ensureBundle(LanguageData.getBusinessBundleName(language));
+        if (!bundle) {
+            return null;
+        }
+
         return new Promise((resolve) => {
-            resources.load(path, JsonAsset, (err, asset) => {
+            bundle.load(language, JsonAsset, (err, asset) => {
                 if (err || !asset) {
                     resolve(null);
                     return;
                 }
 
                 resolve(asset.json as Record<string, string>);
+            });
+        });
+    }
+
+    private async loadBusinessBundleDir(language: string, path: string): Promise<void> {
+        const bundle = await this.ensureBundle(LanguageData.getBusinessBundleName(language));
+        if (!bundle || bundle.getDirWithPath(path).length <= 0) {
+            return;
+        }
+
+        await new Promise<void>((resolve) => {
+            bundle.loadDir(path, (err) => {
+                if (err) {
+                    warn(`[LanguagePack] bundle dir load failed: ${bundle.name}/${path}`);
+                }
+                resolve();
             });
         });
     }
@@ -101,22 +123,6 @@ export class LanguagePack {
                 }
 
                 resolve(asset.json as Record<string, string>);
-            });
-        });
-    }
-
-    private loadResourcesDir(path: string): Promise<void> {
-        const infos = resources.getDirWithPath(path);
-        if (!infos || infos.length <= 0) {
-            return Promise.resolve();
-        }
-
-        return new Promise((resolve) => {
-            resources.loadDir(path, (err) => {
-                if (err) {
-                    warn(`[LanguagePack] resources dir load failed: ${path}`);
-                }
-                resolve();
             });
         });
     }
@@ -143,15 +149,19 @@ export class LanguagePack {
     }
 
     private ensureLanguageBundle(): Promise<AssetManager.Bundle | null> {
-        const existing = assetManager.getBundle(LanguageData.bundleName);
+        return this.ensureBundle(LanguageData.bundleName);
+    }
+
+    private ensureBundle(bundleName: string): Promise<AssetManager.Bundle | null> {
+        const existing = assetManager.getBundle(bundleName);
         if (existing) {
             return Promise.resolve(existing);
         }
 
         return new Promise((resolve) => {
-            assetManager.loadBundle(LanguageData.bundleName, { cacheable: true }, (err, bundle) => {
+            assetManager.loadBundle(bundleName, { cacheable: true }, (err, bundle) => {
                 if (err || !bundle) {
-                    warn(`[LanguagePack] language bundle load failed: ${err?.message || LanguageData.bundleName}`);
+                    warn(`[LanguagePack] language bundle load failed: ${err?.message || bundleName}`);
                     resolve(null);
                     return;
                 }

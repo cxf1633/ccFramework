@@ -71,7 +71,7 @@ export class LanguageSprite extends Component {
     private updateSprite(): void {
         const spriteFrame = this.getSpriteFrame();
         if (!spriteFrame) {
-            console.error("[LanguageSprite] Resource not found: " + this.getResourcePath());
+            console.error(`[LanguageSprite] Resource not found: ${LanguageData.getBusinessBundleName(LanguageData.current)}/texture/${this.dataID}`);
             return;
         }
 
@@ -90,18 +90,14 @@ export class LanguageSprite extends Component {
     }
 
     private getSpriteFrame(): SpriteFrame | null {
-        const resourcesBundle = assetManager.getBundle("resources");
-        const resourcesSpriteFrame = resourcesBundle?.get(this.getResourcePath(), SpriteFrame);
-        if (resourcesSpriteFrame) {
-            return resourcesSpriteFrame;
+        const businessBundle = assetManager.getBundle(LanguageData.getBusinessBundleName(LanguageData.current));
+        const businessSpriteFrame = businessBundle?.get(`texture/${this.dataID}/spriteFrame`, SpriteFrame);
+        if (businessSpriteFrame) {
+            return businessSpriteFrame;
         }
 
         const languageBundle = assetManager.getBundle(LanguageData.bundleName);
         return languageBundle?.get(this.getBundlePath(), SpriteFrame) || null;
-    }
-
-    private getResourcePath(): string {
-        return `${LanguageData.path_texture}/${LanguageData.current}/${this.dataID}/spriteFrame`;
     }
 
     private getBundlePath(): string {

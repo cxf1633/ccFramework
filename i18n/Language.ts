@@ -115,7 +115,10 @@ export class LanguageManager extends Singleton {
         const oldLanguage = LanguageData.current;
         LanguageData.current = language;
         this._languagePack.updateLanguage();
-        this._languagePack.releaseLanguageAssets(oldLanguage);
+        // Prefab 默认序列化引用中文图片；中文资源必须常驻，避免缓存 Prefab 再次激活时引用已释放的 SpriteFrame。
+        if (oldLanguage !== LanguageDefine.zhcn) {
+            this._languagePack.releaseLanguageAssets(oldLanguage);
+        }
         callback?.(true);
     }
 }
