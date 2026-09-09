@@ -5,6 +5,15 @@ import { LanguageSpine } from "./LanguageSpine";
 import { LanguageSprite } from "./LanguageSprite";
 
 export class LanguagePack {
+    /**
+     * 确保指定业务语言 Bundle 已加载。
+     * 场景 Prefab 可能仍序列化引用中文资源，切换到其他语言后也需要中文 Bundle
+     * 的资源索引参与反序列化。
+     */
+    public ensureBusinessBundle(lang: string): Promise<AssetManager.Bundle | null> {
+        return this.ensureBundle(LanguageData.getBusinessBundleName(lang.toLowerCase()));
+    }
+
     public updateLanguage(): void {
         const scene = director.getScene();
         if (!scene) {
@@ -76,7 +85,7 @@ export class LanguagePack {
     }
 
     private async loadBusinessBundleJson(language: string): Promise<Record<string, string> | null> {
-        const bundle = await this.ensureBundle(LanguageData.getBusinessBundleName(language));
+        const bundle = await this.ensureBusinessBundle(language);
         if (!bundle) {
             return null;
         }
@@ -94,7 +103,7 @@ export class LanguagePack {
     }
 
     private async loadBusinessBundleDir(language: string, path: string): Promise<void> {
-        const bundle = await this.ensureBundle(LanguageData.getBusinessBundleName(language));
+        const bundle = await this.ensureBusinessBundle(language);
         if (!bundle || bundle.getDirWithPath(path).length <= 0) {
             return;
         }

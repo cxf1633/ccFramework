@@ -2,7 +2,7 @@ import { sys } from "cc";
 
 export class UrlUtils {
     /**
-     * 读取 URL 查询参数（?server=xxx&language=zh 这种）。
+     * 读取 URL 查询参数（例如 ?server=xxx&debug=1）。
      *
      * 只有网页端才有 URL 参数，原生包（Android / iOS / 小游戏）直接跳过。
      * 注意：原生 JSB 里 window / window.location 是存在的，但没有 URLSearchParams，

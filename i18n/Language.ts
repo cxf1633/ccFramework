@@ -7,6 +7,7 @@ export class LanguageManager extends Singleton {
     private _languages: string[] = this.createLanguageList();
     private readonly _languagePack: LanguagePack = new LanguagePack();
     private readonly _defaultLanguage: string = LanguageDefine.enus;
+    private languageReadyPromise: Promise<void> = Promise.resolve();
 
     public get languages(): string[] {
         return this._languages;
@@ -47,15 +48,24 @@ export class LanguageManager extends Singleton {
             return;
         }
 
-        this.loadLanguageAssets(nextLanguage).then((loaded) => {
-            if (!loaded && nextLanguage !== this._defaultLanguage) {
-                console.log(`[${nextLanguage}] language json is missing, set default language [${this._defaultLanguage}] automatically.`);
-                this.loadLanguageAssets(this._defaultLanguage).then(() => this.applyLanguage(this._defaultLanguage, callback));
-                return;
-            }
+        this.languageReadyPromise = this.changeLanguage(nextLanguage, callback);
+    }
 
-            this.applyLanguage(nextLanguage, callback);
-        });
+    /** 等待最近一次 setLanguage 的资源加载与应用完成。 */
+    public waitUntilReady(): Promise<void> {
+        return this.languageReadyPromise;
+    }
+
+    private async changeLanguage(nextLanguage: string, callback?: (success: boolean) => void): Promise<void> {
+        const loaded = await this.loadLanguageAssets(nextLanguage);
+        if (!loaded && nextLanguage !== this._defaultLanguage) {
+            console.log(`[${nextLanguage}] language json is missing, set default language [${this._defaultLanguage}] automatically.`);
+            await this.loadLanguageAssets(this._defaultLanguage);
+            this.applyLanguage(this._defaultLanguage, callback);
+            return;
+        }
+
+        this.applyLanguage(nextLanguage, callback);
     }
 
     public getLangByID(labId: string, params?: Array<{ key: string, value: string }>): string {
@@ -101,6 +111,12 @@ export class LanguageManager extends Singleton {
     }
 
     private async loadLanguageAssets(language: string): Promise<boolean> {
+        // 项目 Prefab 默认引用中文多语言资源。冷启动直接选择英文时，也必须先加载
+        // 中文 Bundle 的资源索引，否则场景反序列化会报 “Please load bundle language-zh-cn first”。
+        if (language !== LanguageDefine.zhcn) {
+            await this._languagePack.ensureBusinessBundle(LanguageDefine.zhcn);
+        }
+
         const loaded = await this.loadJson(language);
         if (!loaded) {
             return false;
