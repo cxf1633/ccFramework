@@ -37,5 +37,11 @@
     "HEALTHY_GAME_ADVICE_PART2": "Approval Number: Xin Chang Chu Shen [2017] No. 4343 Publication Number: ISBN 978-7-7979-7728-9 Publisher: Fuzhou 169 Company",
     "MODIFY_NICKNAME": "Change Nickname",
     "OLD_NICKNAME": "Current Nickname",
-    "NEW_NICKNAME": "New Nickname"
+    "NEW_NICKNAME": "New Nickname",
+    "HOUR": "Hour",
+    "MINUTE": "Minute",
+    "SECOND": "Second",
+    "HOUR_S": "H",
+    "MINUTE_S": "M",
+    "SECOND_S": "S"
 }

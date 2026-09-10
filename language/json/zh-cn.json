@@ -37,5 +37,11 @@
     "HEALTHY_GAME_ADVICE_PART2": "批准文号:新厂出审[2017]4343号。出版物号:ISBN978-7-7979-7728-9 出版单位:福州169公司。",
     "MODIFY_NICKNAME": "修改昵称",
     "OLD_NICKNAME": "原昵称",
-    "NEW_NICKNAME": "新昵称"
+    "NEW_NICKNAME": "新昵称",
+    "HOUR": "时",
+    "MINUTE": "分",
+    "SECOND": "秒",
+    "HOUR_S": "时",
+    "MINUTE_S": "分",
+    "SECOND_S": "秒"
 }
