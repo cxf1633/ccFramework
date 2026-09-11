@@ -1,4 +1,4 @@
-import { _decorator, Component, Node } from "cc";
+import { _decorator, Component, Layout, Node, Widget } from "cc";
 import { UIToggle } from "./UIToggle";
 
 const { ccclass, property } = _decorator;
@@ -43,6 +43,14 @@ export class UIToggleGroup extends Component {
 
     public getSelected(): UIToggle | null {
         return this.selectedToggle;
+    }
+
+    /** 同步刷新 Toggle 根节点布局及选中背景的 Widget 对齐。 */
+    public refreshLayout(): void {
+        this.getComponent(Layout)?.updateLayout(true);
+        this.toggles.forEach((toggle) => {
+            toggle?.selectNode?.getComponent(Widget)?.updateAlignment();
+        });
     }
 
     private refreshPanels(): void {
