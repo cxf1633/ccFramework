@@ -85,8 +85,11 @@ export class NumberFormatUtils {
     }
 
     private static formatDecimal(value: number, decimalPlaces: number, options: QuantityFormatOptions): string {
+        const factor = Math.pow(10, decimalPlaces);
+        // floor 前加 1e-6 修正浮点误差：十进制小数（如 19.9）或缩写除法（如 97000/10000）的
+        // 结果在二进制下会略小于真实值（9.6999999..），直接 floor 会丢一位（9.69 而非 9.7）。
         const displayValue = options.roundingMode === "floor"
-            ? Math.floor(value * Math.pow(10, decimalPlaces)) / Math.pow(10, decimalPlaces)
+            ? Math.floor(value * factor + 1e-6) / factor
             : value;
         let text = displayValue.toFixed(decimalPlaces);
         if (options.trimTrailingZeros) {
