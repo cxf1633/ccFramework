@@ -6,19 +6,19 @@ const { ccclass, property } = _decorator;
 @ccclass('JellyJumpAnim')
 export class JellyJumpAnim extends BaseAnim {
 
-    @property
+    @property({ tooltip: '起始缩放（入口时的缩放值）' })
     scaleIn: Vec3 = new Vec3(0.5, 0.5, 1); // 起始缩放（入口）
 
-    @property
+    @property({ tooltip: '落地压扁程度，>1 更扁' })
     overshootScale: number = 1.15; // 落地压扁程度 > 1 = 更扁
 
-    @property
+    @property({ tooltip: '落地后的回弹抖动次数' })
     wobbleCount: number = 3; // 回弹抖动次数
 
-    @property
+    @property({ tooltip: '弹起高度比例（相对 scaleY 的增量比例）' })
     jumpHeight: number = 0.25; // 弹起高度比例（相对scaleY增量）
 
-    @property
+    @property({ tooltip: '循环时两次播放之间的间隔（秒）' })
     loopInterval: number = 0.5;      // 循环间隔（秒）
 
     @property({ type: Enum(EasingType), tooltip: '缓动类型' })

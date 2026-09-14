@@ -5,10 +5,10 @@ const { ccclass, property } = _decorator;
 @ccclass('ScaleAnim')
 export class ScaleAnim extends BaseAnim {
 
-    @property
+    @property({ tooltip: '起始缩放' })
     from: Vec3 = new Vec3(0, 0, 0);
 
-    @property
+    @property({ tooltip: '目标缩放' })
     to: Vec3 = new Vec3(1, 1, 1);
 
     @property({ type: Enum(EasingType), tooltip: '缓动类型' })

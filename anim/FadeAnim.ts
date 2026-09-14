@@ -5,22 +5,22 @@ const { ccclass, property } = _decorator;
 @ccclass('FadeAnim')
 export class FadeAnim extends BaseAnim {
 
-    @property
+    @property({ tooltip: '起始透明度（0~255）' })
     from: number = 0;
 
-    @property
+    @property({ tooltip: '目标透明度（0~255）' })
     to: number = 255;
 
-    @property
+    @property({ tooltip: '到达目标后停留的秒数，<=0 表示不淡出' })
     stayTime: number = 0; // 停留时间（<=0 不淡出）
 
-    @property
-    applyFromOnEnable: boolean = true; // onEnable 立即把透明度设为 from，避免延迟/动画开始前露出原透明度
+    @property({ tooltip: '节点启用时立即把透明度设为起始值，避免延迟期间露出原透明度' })
+    applyOnEnable: boolean = true; // onEnable 立即把透明度设为 from，避免延迟/动画开始前露出原透明度
 
     private _opacity: UIOpacity | null = null;
 
     onEnable() {
-        if (this.applyFromOnEnable) {
+        if (this.applyOnEnable) {
             this.getOrAddOpacity().opacity = this.from;
         }
         super.onEnable();

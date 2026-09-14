@@ -5,7 +5,7 @@ const { ccclass, property } = _decorator;
 @ccclass('RotateAnim')
 export class RotateAnim extends BaseAnim {
 
-    @property
+    @property({ tooltip: '旋转角度（度，绕 Z 轴）' })
     angle: number = 360; // 旋转角度
 
     @property({ type: Enum(EasingType), tooltip: '缓动类型' })

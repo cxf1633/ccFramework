@@ -8,10 +8,10 @@ const { ccclass, property } = _decorator;
 @ccclass('FloatUpAnim')
 export class FloatUpAnim extends BaseAnim {
 
-    @property
+    @property({ tooltip: '上下浮动幅度（像素）' })
     floatDistance: number = 10;               // 浮动幅度（像素）
 
-    @property
+    @property({ tooltip: '缩放脉动幅度，0 表示浮动时不缩放' })
     scalePulse: number = 0;                    // 缩放脉动幅度（0 = 不缩放）
 
     @property({ type: Enum(EasingType), tooltip: '缓动类型' })

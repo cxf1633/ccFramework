@@ -78,16 +78,16 @@ export const EasingNames: Record<EasingType, string> = {
 @ccclass('BaseAnim')
 export abstract class BaseAnim extends Component {
 
-    @property
+    @property({ tooltip: '节点启用时自动播放' })
     playOnEnable: boolean = true; // 是否自动播放
 
-    @property
+    @property({ tooltip: '动画时长（秒）' })
     duration: number = 0.3; // 动画时间
 
-    @property
+    @property({ tooltip: '播放前的延迟（秒）' })
     delay: number = 0; // 延迟
 
-    @property
+    @property({ tooltip: '是否循环播放' })
     loop: boolean = false; // 是否循环
 
     protected _isPlaying: boolean = false;
