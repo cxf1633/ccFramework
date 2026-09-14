@@ -34,6 +34,7 @@ Framework.LanguageMgr;
 
 ```text
 assets/framework
+├── anim/       声明式 Tween 动画组件（BaseAnim 基类 + 位移/缩放/旋转/淡入淡出等效果组件）
 ├── audio/      音频通道管理，支持 Cocos AudioSource 与微信原生音频后端
 ├── base/       基础类型，如 Singleton
 ├── event/      全局事件与本地消息总线
@@ -245,6 +246,21 @@ await Framework.SceneMgr.preloadScene("gameBundle", "gameScene");
 - `cocos`：使用 Cocos `AudioSource`。
 - `native`：使用微信 `InnerAudioContext`。
 - `auto`：在微信小游戏/小程序环境下走原生音频，否则走 Cocos。
+
+## 动画组件
+
+`anim/` 提供声明式 Tween 动画组件，直接挂到节点上，在 Inspector 里配置参数即可：
+
+- `BaseAnim`：抽象基类，统一 `playOnEnable` / `duration` / `delay` / `loop` 属性和 `play()` / `replay()` / `stop()` 生命周期；导出 `EasingType` 枚举（Inspector 下拉选择缓动曲线）与 `EasingNames` 映射。
+- `FadeAnim`：透明度淡入淡出，支持停留时间。
+- `MoveAnim`：从 `from` 移动到 `to`，默认局部坐标，可切换世界坐标。
+- `RotateAnim`：绕 Z 轴旋转指定角度。
+- `ScaleAnim`：从 `from` 缩放到 `to`。
+- `FloatUpAnim`：上下往返浮动，可叠加缩放脉动。
+- `JellyJumpAnim`：果冻弹跳（弹起、落地压扁、衰减抖动）。
+- `BellShakeAnim`：铃铛式左右衰减摆动。
+
+组件在 `onEnable` 时按 `playOnEnable` 自动播放，`onDisable` 自动停止；循环动画停止后会停在该节点当时的变换状态，带 `_originPos` / `_originScale` 缓存的组件（`FloatUpAnim` 等）会还原到初始变换。
 
 ## 数据模型
 
