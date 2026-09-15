@@ -15,6 +15,9 @@ export class ScaleAnim extends BaseAnim {
     @property({ type: Enum(EasingType), tooltip: '缓动类型' })
     easing: EasingType = EasingType.BackOut;
 
+    @property({ type: Enum(EasingType), tooltip: '反向播放的缓动类型' })
+    reverseEasing: EasingType = EasingType.QuadIn;
+
     /** 立即播放缩放；reverse 为 true 时从 to 播到 from，反向只播放一次。 */
     public onPlay(onComplete?: () => void, reverse: boolean = false): void {
         this.stop();
@@ -26,7 +29,8 @@ export class ScaleAnim extends BaseAnim {
         this.node.setScale(reverse ? this.to : this.from);
 
         // 使用 easing 对象获取缓动函数
-        const easingFunc = this.getEasingFunction(EasingNames[this.easing]);
+        const easingType = reverse ? this.reverseEasing : this.easing;
+        const easingFunc = this.getEasingFunction(EasingNames[easingType]);
 
         const t = tween(this.node)
             .to(this.duration,

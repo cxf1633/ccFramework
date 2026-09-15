@@ -37,24 +37,29 @@ export class FadeAnim extends BaseAnim {
         return this._opacity;
     }
 
-    protected onPlay() {
-
+    /** 立即播放透明度动画；反向从 to 播到 from，不停留、不循环。 */
+    public onPlay(onComplete?: () => void, reverse: boolean = false): void {
+        this.stop();
+        if (!this.enabledInHierarchy) {
+            return;
+        }
+        this._isPlaying = true;
         this._opacity = this.getOrAddOpacity();
 
-        this._opacity.opacity = this.from;
+        this._opacity.opacity = reverse ? this.to : this.from;
 
         this._tween = tween(this._opacity)
-            .to(this.duration, { opacity: this.to });
+            .to(this.duration, { opacity: reverse ? this.from : this.to });
 
         // 有停留时间 → 再淡出
-        if (this.stayTime > 0) {
+        if (this.stayTime > 0 && !reverse) {
             this._tween = this._tween
                 .delay(this.stayTime)
                 .to(this.duration, { opacity: this.from });
         }
 
         // 循环逻辑
-        if (this.loop) {
+        if (this.loop && !reverse) {
 
             if (this.stayTime > 0) {
                 // 淡入 → 停留 → 淡出 → 循环
@@ -67,6 +72,12 @@ export class FadeAnim extends BaseAnim {
                     .union()
                     .repeatForever();
             }
+        } else {
+            this._tween = this._tween.call(() => {
+                this._isPlaying = false;
+                this._tween = null;
+                onComplete?.();
+            });
         }
 
         this._tween.start();
