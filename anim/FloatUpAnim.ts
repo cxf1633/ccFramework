@@ -2,9 +2,7 @@ import { _decorator, tween, Vec3, Tween, Enum } from 'cc';
 import { BaseAnim, EasingType, EasingNames } from './BaseAnim';
 const { ccclass, property } = _decorator;
 
-/**
- * 上下浮动动画 - 节点在垂直方向来回浮动
- */
+/** 上下浮动动画 - 节点在垂直方向来回浮动，可伴随弹性伸缩 */
 @ccclass('FloatUpAnim')
 export class FloatUpAnim extends BaseAnim {
 

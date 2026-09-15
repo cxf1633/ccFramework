@@ -2,10 +2,7 @@ import { _decorator, tween, Vec3, Tween, Enum, Node } from 'cc';
 import { BaseAnim, EasingType, EasingNames } from './BaseAnim';
 const { ccclass, property } = _decorator;
 
-/**
- * 移动动画 —— 节点从 from 移动到 to。
- * 默认使用局部坐标（position，相对父节点）；勾选 useWorldPosition 后按世界坐标移动。
- */
+/** 移动动画 - 节点从起点移动到终点，支持局部坐标和世界坐标 */
 @ccclass('MoveAnim')
 export class MoveAnim extends BaseAnim {
 

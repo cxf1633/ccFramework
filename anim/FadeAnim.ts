@@ -2,6 +2,7 @@ import { _decorator, tween, UIOpacity } from 'cc';
 import { BaseAnim } from './BaseAnim';
 const { ccclass, property } = _decorator;
 
+/** 淡入淡出动画 - 透明度从起始值过渡到目标值，可停留后淡回 */
 @ccclass('FadeAnim')
 export class FadeAnim extends BaseAnim {
 

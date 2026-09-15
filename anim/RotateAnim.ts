@@ -2,6 +2,7 @@ import { _decorator, Vec3, tween, Enum } from 'cc';
 import { BaseAnim, EasingType, EasingNames } from './BaseAnim';
 const { ccclass, property } = _decorator;
 
+/** 旋转动画 - 节点绕 Z 轴旋转指定角度 */
 @ccclass('RotateAnim')
 export class RotateAnim extends BaseAnim {
 

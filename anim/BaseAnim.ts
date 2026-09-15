@@ -75,6 +75,7 @@ export const EasingNames: Record<EasingType, string> = {
     [EasingType.BounceInOut]: 'bounceInOut',
 };
 
+/** 动画基类 - 统一管理自动播放、延迟、重播和停止 */
 @ccclass('BaseAnim')
 export abstract class BaseAnim extends Component {
 

@@ -2,7 +2,7 @@ import { _decorator, tween, Vec3, Enum } from "cc";
 import { BaseAnim, EasingType, EasingNames } from "./BaseAnim";
 const { ccclass, property } = _decorator;
 
-/** 铃铛摇晃动画 —— 左右衰减摆动，模拟铃铛被敲击后的晃动效果 */
+/** 铃铛摇晃动画 - 左右衰减摆动，模拟铃铛被敲击后的晃动效果 */
 @ccclass("BellShakeAnim")
 export class BellShakeAnim extends BaseAnim {
 
