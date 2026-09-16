@@ -18,6 +18,16 @@ export class ScaleAnim extends BaseAnim {
     @property({ type: Enum(EasingType), tooltip: '反向播放的缓动类型' })
     reverseEasing: EasingType = EasingType.QuadIn;
 
+    @property({ tooltip: '节点启用时立即设为起始缩放，避免动画开始前闪现' })
+    applyOnEnable: boolean = true;
+
+    public override onEnable(): void {
+        if (this.applyOnEnable) {
+            this.node.setScale(this.from);
+        }
+        super.onEnable();
+    }
+
     /** 立即播放缩放；reverse 为 true 时从 to 播到 from，反向只播放一次。 */
     public onPlay(onComplete?: () => void, reverse: boolean = false): void {
         this.stop();

@@ -21,6 +21,20 @@ export class MoveAnim extends BaseAnim {
     @property({ tooltip: '使用世界坐标移动（默认关 = 局部坐标）' })
     useWorldPosition: boolean = false;
 
+    @property({ tooltip: '节点启用时立即设为起始位置，避免动画开始前闪现' })
+    applyOnEnable: boolean = true;
+
+    public override onEnable(): void {
+        if (this.applyOnEnable) {
+            if (this.useWorldPosition) {
+                this.node.setWorldPosition(this.from);
+            } else {
+                this.node.setPosition(this.from);
+            }
+        }
+        super.onEnable();
+    }
+
     /** 立即播放移动；反向从 to 播到 from，只播放一次。 */
     public onPlay(onComplete?: () => void, reverse: boolean = false): void {
         this.stop();

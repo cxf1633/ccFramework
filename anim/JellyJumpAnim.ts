@@ -9,6 +9,9 @@ export class JellyJumpAnim extends BaseAnim {
     @property({ tooltip: '起始缩放（入口时的缩放值）' })
     scaleIn: Vec3 = new Vec3(0.5, 0.5, 1); // 起始缩放（入口）
 
+    @property({ tooltip: '节点启用时立即设为起始缩放，避免动画开始前闪现' })
+    applyOnEnable: boolean = true;
+
     @property({ tooltip: '落地压扁程度，>1 更扁' })
     overshootScale: number = 1.15; // 落地压扁程度 > 1 = 更扁
 
@@ -28,6 +31,13 @@ export class JellyJumpAnim extends BaseAnim {
 
     protected onLoad(): void {
         this._originScale = this.node.getScale().clone();
+    }
+
+    public override onEnable(): void {
+        if (this.applyOnEnable) {
+            this.node.setScale(this.scaleIn);
+        }
+        super.onEnable();
     }
 
     protected onPlay(): void {
