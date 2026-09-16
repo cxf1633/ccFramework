@@ -15,27 +15,42 @@ export class MoveAnim extends BaseAnim {
     @property({ type: Enum(EasingType), tooltip: '缓动类型' })
     easing: EasingType = EasingType.SineOut;
 
+    @property({ type: Enum(EasingType), tooltip: '反向播放的缓动类型' })
+    reverseEasing: EasingType = EasingType.SineIn;
+
     @property({ tooltip: '使用世界坐标移动（默认关 = 局部坐标）' })
     useWorldPosition: boolean = false;
 
-    protected onPlay(): void {
-        const easingFn = this.getEasingFunction(EasingNames[this.easing]);
+    /** 立即播放移动；反向从 to 播到 from，只播放一次。 */
+    public onPlay(onComplete?: () => void, reverse: boolean = false): void {
+        this.stop();
+        if (!this.enabledInHierarchy) {
+            return;
+        }
+        this._isPlaying = true;
+        const easingFn = this.getEasingFunction(EasingNames[reverse ? this.reverseEasing : this.easing]);
+        const from = reverse ? this.to : this.from;
+        const to = reverse ? this.from : this.to;
 
         let t: Tween<Node>;
         if (this.useWorldPosition) {
             // 世界坐标：起点/终点均按世界坐标理解
-            this.node.setWorldPosition(this.from);
-            t = tween(this.node).to(this.duration, { worldPosition: this.to }, { easing: easingFn });
+            this.node.setWorldPosition(from);
+            t = tween(this.node).to(this.duration, { worldPosition: to }, { easing: easingFn });
         } else {
             // 局部坐标（默认）
-            this.node.setPosition(this.from);
-            t = tween(this.node).to(this.duration, { position: this.to }, { easing: easingFn });
+            this.node.setPosition(from);
+            t = tween(this.node).to(this.duration, { position: to }, { easing: easingFn });
         }
 
-        if (this.loop) {
+        if (this.loop && !reverse) {
             this._tween = t.union().repeatForever().start();
         } else {
-            this._tween = t.start();
+            this._tween = t.call(() => {
+                this._isPlaying = false;
+                this._tween = null;
+                onComplete?.();
+            }).start();
         }
     }
 
