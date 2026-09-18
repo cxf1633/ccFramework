@@ -68,6 +68,17 @@ export class MoveAnim extends BaseAnim {
         }
     }
 
+    /** 立即置于终点，不播放动画；reverse 为 true 时置于起点。 */
+    public applyImmediate(reverse: boolean = false): void {
+        this.stop();
+        const target = reverse ? this.from : this.to;
+        if (this.useWorldPosition) {
+            this.node.setWorldPosition(target);
+        } else {
+            this.node.setPosition(target);
+        }
+    }
+
     protected onStop(): void {
         Tween.stopAllByTarget(this.node);
         this._tween = null;
