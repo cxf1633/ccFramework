@@ -22,6 +22,8 @@ export interface UIConfig {
     bundle: string;
     prefab: string;
     layer: UILayerType;
+    /** 仅 Dialog 层生效；默认 false，设为 true 时等待当前 Dialog 关闭后按队列打开。 */
+    queue?: boolean;
     destroy?: boolean;
     blockInput?: boolean;
 }

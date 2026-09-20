@@ -65,7 +65,7 @@ Framework.UIMgr.closeById(UIID.HoldemMain);
 
 运行时实例以注册 UIID 为唯一身份；层级只决定父节点和渲染顺序，不参与实例查找。同一 Prefab 注册为不同 UIID 时会得到相互独立的实例。
 
-非 Dialog UI 在异步加载期间，同一 UIID 的打开请求共享一个 Promise，并使用最新参数完成展示；Dialog 请求仍按队列逐个处理。加载完成前关闭 UIID 会取消当前挂载。
+默认所有 UI 都不排队；在异步加载期间，同一 UIID 的打开请求共享一个 Promise，并使用最新参数完成展示。只有配置了 `layer: UILayerType.Dialog, queue: true` 的请求才按队列逐个处理。加载完成前关闭 UIID 会取消当前挂载。
 
 UI 层级从低到高为：
 
@@ -73,7 +73,7 @@ UI 层级从低到高为：
 Game -> UI -> PopUp -> Dialog -> Toast -> System -> Guide
 ```
 
-其中 `Dialog` 层带排队语义，同一时间只展示一个强交互弹窗；`System` 层用于等待遮罩、重连遮罩、热更新进度等阻塞交互的系统 UI。
+其中 `Dialog` 层默认允许叠加显示，后打开的界面显示在上面。`queue` 默认是 `false`，仅在 Dialog 层生效；设为 `true` 时等待当前 Dialog 全部关闭后按队列打开。未启用排队的 Dialog 可以直接打开，不受队列阻塞。同步接口 `openPreloadedById` 对启用排队且队列忙碌的请求返回 `null`，需要排队等待时使用 `openById`。`System` 层用于等待遮罩、重连遮罩、热更新进度等阻塞交互的系统 UI。
 
 `UIManager` 直接绑定场景中的 UI 层级。当前项目的 `UIRoot.prefab` 使用 `UIRoot -> game/gui` 结构；缺少预定义层节点或层顺序错误时，初始化会失败并输出错误。
 

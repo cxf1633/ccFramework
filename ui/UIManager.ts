@@ -7,7 +7,7 @@ import {
     type UIConfig,
 } from "./UIDefines";
 
-type ResolvedUIConfig = UIConfig & Required<Pick<UIConfig, "destroy" | "blockInput">>;
+type ResolvedUIConfig = UIConfig & Required<Pick<UIConfig, "queue" | "destroy" | "blockInput">>;
 
 interface UIState {
     id: string;
@@ -121,7 +121,7 @@ export class UIManager {
         if (!config) return null;
         if (!this.getLayerNode(config.layer)) return null;
 
-        if (config.layer === UILayerType.Dialog) {
+        if (config.layer === UILayerType.Dialog && config.queue) {
             return new Promise<Node | null>((resolve) => {
                 this.dialogQueue.enqueue({ id: uiid, config, params, resolve });
             });
@@ -136,7 +136,7 @@ export class UIManager {
         const layerNode = this.getLayerNode(config.layer);
         if (!layerNode) return null;
 
-        if (config.layer === UILayerType.Dialog && this.dialogQueue.isBusy()) {
+        if (config.layer === UILayerType.Dialog && config.queue && this.dialogQueue.isBusy()) {
             console.warn(`[UIManager] Cannot open preloaded dialog while busy: ${uiid}`);
             return null;
         }
@@ -510,6 +510,7 @@ export class UIManager {
 
         return {
             ...config,
+            queue: config.queue ?? false,
             destroy: config.destroy ?? true,
             blockInput: config.blockInput ?? (config.layer !== UILayerType.Toast),
         };
