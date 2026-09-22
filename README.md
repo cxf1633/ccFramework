@@ -108,6 +108,7 @@ Game -> UI -> PopUp -> Dialog -> Toast -> System -> Guide
 `radius` 和 `startAngle` 均分计算。`centerNode` 指定数值为 0 时顶点收缩到的中心点，
 可以直接摆到网格切图的中心上，留空则用组件节点自身的位置。外层网格、轴线和文字由业务节点用切图和 Label 摆放，
 组件只画数据区域，通过多层描边叠出发光，并支持由中心向外的展开动画。
+
 业务侧调用 `setValues(values, animated)` 刷新，`clear()` 清空。传入的是各轴原始数值，
 组件按业务侧通过 `setAxisMaxValues(maxValues)` 传入的满格上限（按下标与 `axisNodes` 对应）
 归一化，超出上限的部分顶格，某轴上限留空或 <= 0 时按 1 处理，即认为传入值已归一化。
@@ -120,6 +121,10 @@ Game -> UI -> PopUp -> Dialog -> Toast -> System -> Guide
 颜色、描边和发光参数，`previewInEditor` 可关闭预览。`onLoad` 会校验轴节点是否有遗漏，
 以及轴节点是否沿圆周依次排列（顺序错乱会导致多边形自交）；轴上限数量与轴节点不一致时，
 `setAxisMaxValues` 会输出警告。
+
+`ui/components/NumberRoller.ts` 为 `Label` 提供通用数值滚动。它维护独立的真实数值，
+连续更新时从当前动画值重定向到新目标，并支持立即设置、停止、缓动配置及业务格式化函数；
+金币缩写、货币符号等业务格式应通过 `setFormatter()` 注入，不放入框架组件。
 
 `UILayer` 继承 `UIBase`，用于完整 UI 界面，并统一管理只在界面显示期间有效的键盘监听和秒级 Label 定时任务：
 
