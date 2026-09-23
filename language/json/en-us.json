@@ -43,5 +43,11 @@
     "SECOND": "Second",
     "HOUR_S": "H",
     "MINUTE_S": "M",
-    "SECOND_S": "S"
+    "SECOND_S": "S",
+    "UPDATE_DETECT_TITLE": "Update Available",
+    "UPDATE_DETECT_CONTENT": "A new version is detected. Please re-download the App.",
+    "UPDATE_POP_CONTENT": "A new version detected. Tap OK to update.",
+    "VERSION_INFO_INVALID": "Invalid version information. Please re-download.",
+    "UPDATE_LOAD_FAIL": "Failed to load update prompt. Please restart the game and try again.",
+    "PACKAGE_MANIFEST_INVALID": "Invalid package manifest. Please reinstall."
 }

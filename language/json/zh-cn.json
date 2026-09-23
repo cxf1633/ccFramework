@@ -43,5 +43,11 @@
     "SECOND": "秒",
     "HOUR_S": "时",
     "MINUTE_S": "分",
-    "SECOND_S": "秒"
+    "SECOND_S": "秒",
+    "UPDATE_DETECT_TITLE": "版本更新",
+    "UPDATE_DETECT_CONTENT": "检测到新版本，需重新下载 App。",
+    "UPDATE_POP_CONTENT": "检测到版本更新，点击确定更新版本",
+    "VERSION_INFO_INVALID": "版本信息无效，请重新下载。",
+    "UPDATE_LOAD_FAIL": "更新提示加载失败，请重启游戏后重试。",
+    "PACKAGE_MANIFEST_INVALID": "安装包版本清单无效，请重新安装。"
 }
