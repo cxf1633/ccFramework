@@ -25,7 +25,7 @@
     "SYSTEM_4": "TIME OUT",
     "SYSTEM_5": "Two consecutive timeouts, let's take a break.",
     "LOGIN_APPLE": "Sign in with Apple",
-    "LOGIN_PHONE": "Sign in with Phone",
+    "LOGIN_PHONE": "Sign in with Phone Number",
     "LOGIN_WECHAT": "Sign in with WeChat",
     "LOGIN_GUEST": "Guest Login",
     "LOGIN_AGREEMENT_TIP": "By logging in, you confirm you have read and agree to",
