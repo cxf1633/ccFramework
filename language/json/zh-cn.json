@@ -49,5 +49,14 @@
     "UPDATE_POP_CONTENT": "检测到版本更新，点击确定更新版本",
     "VERSION_INFO_INVALID": "版本信息无效，请重新下载。",
     "UPDATE_LOAD_FAIL": "更新提示加载失败，请重启游戏后重试。",
-    "PACKAGE_MANIFEST_INVALID": "安装包版本清单无效，请重新安装。"
+    "PACKAGE_MANIFEST_INVALID": "安装包版本清单无效，请重新安装。",
+    "HOT_UPDATE_BOOT_CONFIG_MISSING": "安装包热更新配置缺失，请重新安装。",
+    "HOT_UPDATE_CHECK_FAILED": "更新检查失败，请重启游戏后重试。",
+    "HOT_UPDATE_URL_MISMATCH": "更新资源地址不匹配，请联系管理员。",
+    "HOT_UPDATE_STORAGE_WRITE_FAILED": "无法写入更新目录，请检查存储空间后重试。",
+    "HOT_UPDATE_PROGRESS": "更新进度：%{percent}%",
+    "HOT_UPDATE_STATE_SAVE_FAILED": "无法保存更新状态，请重启游戏。",
+    "HOT_UPDATE_RESTARTING": "更新完成，正在重启。",
+    "HOT_UPDATE_FAILED_RETRY": "更新失败，请点击确定重试。",
+    "HOT_UPDATE_FAILED_RESTART": "更新失败，请重启游戏后重试。"
 }

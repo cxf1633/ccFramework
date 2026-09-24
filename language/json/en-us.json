@@ -25,7 +25,7 @@
     "SYSTEM_4": "TIME OUT",
     "SYSTEM_5": "Two consecutive timeouts, let's take a break.",
     "LOGIN_APPLE": "Sign in with Apple",
-    "LOGIN_PHONE": "Sign in with Phone Number",
+    "LOGIN_PHONE": "Sign in with Phone",
     "LOGIN_WECHAT": "Sign in with WeChat",
     "LOGIN_GUEST": "Guest Login",
     "LOGIN_AGREEMENT_TIP": "By logging in, you confirm you have read and agree to",
@@ -49,5 +49,14 @@
     "UPDATE_POP_CONTENT": "A new version detected. Tap OK to update.",
     "VERSION_INFO_INVALID": "Invalid version information. Please re-download.",
     "UPDATE_LOAD_FAIL": "Failed to load update prompt. Please restart the game and try again.",
-    "PACKAGE_MANIFEST_INVALID": "Invalid package manifest. Please reinstall."
+    "PACKAGE_MANIFEST_INVALID": "Invalid package manifest. Please reinstall.",
+    "HOT_UPDATE_BOOT_CONFIG_MISSING": "The package's hot-update configuration is missing. Please reinstall.",
+    "HOT_UPDATE_CHECK_FAILED": "Failed to check for updates. Please restart the game and try again.",
+    "HOT_UPDATE_URL_MISMATCH": "The update resource URL does not match. Please contact the administrator.",
+    "HOT_UPDATE_STORAGE_WRITE_FAILED": "Unable to write to the update directory. Please check the available storage and try again.",
+    "HOT_UPDATE_PROGRESS": "Update progress: %{percent}%",
+    "HOT_UPDATE_STATE_SAVE_FAILED": "Unable to save the update status. Please restart the game.",
+    "HOT_UPDATE_RESTARTING": "Update complete. Restarting...",
+    "HOT_UPDATE_FAILED_RETRY": "Update failed. Tap OK to try again.",
+    "HOT_UPDATE_FAILED_RESTART": "Update failed. Please restart the game and try again."
 }
