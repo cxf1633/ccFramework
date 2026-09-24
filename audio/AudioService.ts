@@ -25,7 +25,7 @@ const SOUND_CHANNEL = "sound";
 
 /** 通用音频服务，负责资源缓存、音乐与音效播放，以及运行时音量和静音状态。 */
 export class AudioService {
-    private readonly nativeAudio: AudioManager = new AudioManager();
+    private readonly audioManager: AudioManager = new AudioManager();
     private readonly resourceAudioClips: Map<string, AudioClip> = new Map();
     private readonly resourceAudioLoading: Map<string, Promise<AudioClip>> = new Map();
     private readonly bundleAudioClips: Map<string, AudioClip> = new Map();
@@ -53,9 +53,9 @@ export class AudioService {
         this.musicMuted = options.musicMuted === true;
         this.soundMuted = options.soundMuted === true;
 
-        this.nativeAudio.initialize(hostNode);
-        this.nativeAudio.createChannel(MUSIC_CHANNEL);
-        this.nativeAudio.createChannel(SOUND_CHANNEL);
+        this.audioManager.initialize(hostNode);
+        this.audioManager.createChannel(MUSIC_CHANNEL);
+        this.audioManager.createChannel(SOUND_CHANNEL);
         UIButton.setClickSoundPlayer((clip) => this.playButtonSound(clip));
 
         const preloadResources = options.preloadResources || [];
@@ -68,7 +68,7 @@ export class AudioService {
     public dispose(): void {
         this.musicPlayVersion++;
         UIButton.setClickSoundPlayer(null);
-        this.nativeAudio.dispose();
+        this.audioManager.dispose();
         this.resourceAudioClips.clear();
         this.resourceAudioLoading.clear();
         this.bundleAudioClips.clear();
@@ -113,15 +113,15 @@ export class AudioService {
 
         // Logger.log(`[AudioService] 播放音乐: ${path.substring(path.lastIndexOf('/') + 1)}`);
         const playbackVolume = this.getMusicPlaybackVolume(volume);
-        this.nativeAudio.setSource(MUSIC_CHANNEL, clip, { loop, volume: playbackVolume });
-        this.nativeAudio.play(MUSIC_CHANNEL, { loop, volume: playbackVolume, restart: true });
+        this.audioManager.setSource(MUSIC_CHANNEL, clip, { loop, volume: playbackVolume });
+        this.audioManager.play(MUSIC_CHANNEL, { loop, volume: playbackVolume, restart: true });
     }
 
     /** 停止当前背景音乐，并取消尚未完成的异步音乐播放请求。 */
     public stopMusic(): void {
         // Logger.log('[AudioService] 停止音乐');
         this.musicPlayVersion++;
-        this.nativeAudio.stop(MUSIC_CHANNEL);
+        this.audioManager.stop(MUSIC_CHANNEL);
     }
 
     /** 直接播放已加载的 AudioClip 音效。 */
@@ -132,10 +132,9 @@ export class AudioService {
         options: AudioSoundPlayOptions = {},
     ): void {
         // Logger.log(`[AudioService] 播放音效: ${logName.substring(logName.lastIndexOf('/') + 1)}`);
-        this.nativeAudio.playOneShot(
+        this.audioManager.playOneShot(
             clip,
             this.getSoundPlaybackVolume(volume),
-            "auto",
             options.uninterrupted === true,
         );
     }
@@ -144,12 +143,12 @@ export class AudioService {
     public setMuted(type: AudioType, muted: boolean): void {
         if (type === "music") {
             this.musicMuted = muted;
-            this.nativeAudio.setVolume(MUSIC_CHANNEL, this.getMusicPlaybackVolume(1));
+            this.audioManager.setVolume(MUSIC_CHANNEL, this.getMusicPlaybackVolume(1));
             return;
         }
 
         this.soundMuted = muted;
-        this.nativeAudio.setVolume(SOUND_CHANNEL, this.getSoundPlaybackVolume(1));
+        this.audioManager.setVolume(SOUND_CHANNEL, this.getSoundPlaybackVolume(1));
     }
 
     /** 查询指定音频类型是否静音。 */
@@ -162,12 +161,12 @@ export class AudioService {
         const normalizedVolume = this.normalizeVolume(volume);
         if (type === "music") {
             this.musicVolume = normalizedVolume;
-            this.nativeAudio.setVolume(MUSIC_CHANNEL, this.getMusicPlaybackVolume(1));
+            this.audioManager.setVolume(MUSIC_CHANNEL, this.getMusicPlaybackVolume(1));
             return;
         }
 
         this.soundVolume = normalizedVolume;
-        this.nativeAudio.setVolume(SOUND_CHANNEL, this.getSoundPlaybackVolume(1));
+        this.audioManager.setVolume(SOUND_CHANNEL, this.getSoundPlaybackVolume(1));
     }
 
     /** 获取指定音频类型的运行时音量。 */
