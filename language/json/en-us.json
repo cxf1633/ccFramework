@@ -60,5 +60,7 @@
     "HOT_UPDATE_FAILED_RETRY": "Update failed. Tap OK to try again.",
     "HOT_UPDATE_FAILED_RESTART": "Update failed. Please restart the game and try again.",
     "STARTUP_LOAD_TITLE": "Startup Error",
-    "STARTUP_LOAD_FAILED": "Failed to load startup resources. Tap OK to try again."
+    "STARTUP_LOAD_FAILED": "Failed to load startup resources. Tap OK to try again.",
+    "SERVER_CONNECTION_FAILED": "Unable to connect to the server. Please try again later.",
+    "LOGIN_FAILED_RETRY": "Login failed. Please try again later."
 }
