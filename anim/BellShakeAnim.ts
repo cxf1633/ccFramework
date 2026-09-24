@@ -1,5 +1,5 @@
-import { _decorator, tween, Vec3, Enum } from "cc";
-import { BaseAnim, EasingType, EasingNames } from "./BaseAnim";
+import { _decorator, tween, Vec3 } from "cc";
+import { BaseAnim, EasingType } from "./BaseAnim";
 const { ccclass, property } = _decorator;
 
 /** 铃铛摇晃动画 - 左右衰减摆动，模拟铃铛被敲击后的晃动效果 */
@@ -15,8 +15,8 @@ export class BellShakeAnim extends BaseAnim {
     @property({ tooltip: "每次摆动幅度衰减系数 (0~1)" })
     decayPerSwing: number = 0.55;
 
-    @property({ type: Enum(EasingType), tooltip: "缓动类型" })
-    easing: EasingType = EasingType.SineInOut;
+    @property({ type: String, tooltip: "缓动函数名，例如 sineInOut、quadInOut" })
+    easing: string = 'sineInOut';
 
     protected onPlay() {
         const totalSwing = this.swingCount;
@@ -24,7 +24,7 @@ export class BellShakeAnim extends BaseAnim {
         const singleSwingDuration = this.duration / (totalSwing * 2);
 
         let t = tween(this.node);
-        const easingFn = this.getEasingFunction(EasingNames[this.easing]);
+        const easingFn = this.getEasingFunction(this.easing as string | EasingType);
 
         // 逐次衰减摆动
         for (let i = 0; i < totalSwing; i++) {

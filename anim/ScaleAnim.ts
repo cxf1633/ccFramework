@@ -1,5 +1,5 @@
-import { _decorator, tween, Vec3, Tween, Enum } from 'cc';
-import { BaseAnim, EasingType, EasingNames } from './BaseAnim';
+import { _decorator, tween, Vec3, Tween } from 'cc';
+import { BaseAnim, EasingType } from './BaseAnim';
 const { ccclass, property } = _decorator;
 
 /** 缩放动画 - 在起始与目标缩放之间过渡，支持反向播放 */
@@ -12,11 +12,11 @@ export class ScaleAnim extends BaseAnim {
     @property({ tooltip: '目标缩放' })
     to: Vec3 = new Vec3(1, 1, 1);
 
-    @property({ type: Enum(EasingType), tooltip: '缓动类型' })
-    easing: EasingType = EasingType.BackOut;
+    @property({ type: String, tooltip: '缓动函数名，例如 cubicOut、quadOut、backOut' })
+    easing: string = 'backOut';
 
-    @property({ type: Enum(EasingType), tooltip: '反向播放的缓动类型' })
-    reverseEasing: EasingType = EasingType.QuadIn;
+    @property({ type: String, tooltip: '反向播放的缓动函数名，例如 quadIn、cubicIn' })
+    reverseEasing: string = 'quadIn';
 
     @property({ tooltip: '节点启用时立即设为起始缩放，避免动画开始前闪现' })
     applyOnEnable: boolean = true;
@@ -39,8 +39,10 @@ export class ScaleAnim extends BaseAnim {
         this.node.setScale(reverse ? this.to : this.from);
 
         // 使用 easing 对象获取缓动函数
-        const easingType = reverse ? this.reverseEasing : this.easing;
-        const easingFunc = this.getEasingFunction(EasingNames[easingType]);
+        // getEasingFunction 同时兼容旧预制体中已经序列化的 EasingType 数字值。
+        const easingFunc = this.getEasingFunction(
+            (reverse ? this.reverseEasing : this.easing) as string | EasingType,
+        );
 
         const t = tween(this.node)
             .to(this.duration,

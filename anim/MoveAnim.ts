@@ -1,5 +1,5 @@
-import { _decorator, tween, Vec3, Tween, Enum, Node } from 'cc';
-import { BaseAnim, EasingType, EasingNames } from './BaseAnim';
+import { _decorator, tween, Vec3, Tween, Node } from 'cc';
+import { BaseAnim, EasingType } from './BaseAnim';
 const { ccclass, property } = _decorator;
 
 /** 移动动画 - 节点从起点移动到终点，支持局部坐标和世界坐标 */
@@ -12,11 +12,11 @@ export class MoveAnim extends BaseAnim {
     @property({ tooltip: '目标位置（局部坐标）' })
     to: Vec3 = new Vec3(100, 0, 0);
 
-    @property({ type: Enum(EasingType), tooltip: '缓动类型' })
-    easing: EasingType = EasingType.SineOut;
+    @property({ type: String, tooltip: '缓动函数名，例如 sineOut、cubicOut' })
+    easing: string = 'sineOut';
 
-    @property({ type: Enum(EasingType), tooltip: '反向播放的缓动类型' })
-    reverseEasing: EasingType = EasingType.SineIn;
+    @property({ type: String, tooltip: '反向播放的缓动函数名，例如 sineIn、cubicIn' })
+    reverseEasing: string = 'sineIn';
 
     @property({ tooltip: '使用世界坐标移动（默认关 = 局部坐标）' })
     useWorldPosition: boolean = false;
@@ -42,7 +42,9 @@ export class MoveAnim extends BaseAnim {
             return;
         }
         this._isPlaying = true;
-        const easingFn = this.getEasingFunction(EasingNames[reverse ? this.reverseEasing : this.easing]);
+        const easingFn = this.getEasingFunction(
+            (reverse ? this.reverseEasing : this.easing) as string | EasingType,
+        );
         const from = reverse ? this.to : this.from;
         const to = reverse ? this.from : this.to;
 

@@ -1,4 +1,4 @@
-import { _decorator, tween, Vec3, Tween, Enum } from 'cc';
+import { _decorator, tween, Vec3, Tween } from 'cc';
 import { BaseAnim, EasingType } from './BaseAnim';
 const { ccclass, property } = _decorator;
 
@@ -24,8 +24,8 @@ export class JellyJumpAnim extends BaseAnim {
     @property({ tooltip: '循环时两次播放之间的间隔（秒）' })
     loopInterval: number = 0.5;      // 循环间隔（秒）
 
-    @property({ type: Enum(EasingType), tooltip: '缓动类型' })
-    easing: EasingType = EasingType.ElasticOut; // 主缓动
+    @property({ type: String, tooltip: '主缓动函数名，例如 elasticOut、backOut' })
+    easing: string = 'elasticOut'; // 主缓动
 
     private _originScale: Vec3 = new Vec3(1, 1, 1);
 
@@ -57,7 +57,7 @@ export class JellyJumpAnim extends BaseAnim {
         // 阶段2: 落地压扁
         // 阶段3~N: 逐步衰减的抖动 → 归位
 
-        const elasticFn = this.getEasingFunction('elasticOut');
+        const elasticFn = this.getEasingFunction(this.easing as string | EasingType);
         const bounceFn = this.getEasingFunction('bounceOut');
 
         const t = tween(this.node);

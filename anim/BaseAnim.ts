@@ -1,9 +1,9 @@
-import { easing, Enum } from 'cc';
+import { easing } from 'cc';
 import { Tween } from 'cc';
 import { _decorator, Component } from 'cc';
 const { ccclass, property } = _decorator;
 
-/** 缓动类型（数值枚举，配合 @property({ type: Enum(EasingType) }) 在 Inspector 显示下拉菜单） */
+/** 旧预制体缓动数值兼容枚举；新的 Inspector 配置直接保存缓动函数名。 */
 export enum EasingType {
     Linear = 0,
     Constant,
@@ -130,7 +130,10 @@ export abstract class BaseAnim extends Component {
     protected abstract onStop(): void;
 
     // 字符串到缓动函数的映射，未知名字默认回退 sineOut
-    protected getEasingFunction(easingName: string): ((k: number) => number) {
+    protected getEasingFunction(easingValue: string | EasingType): ((k: number) => number) {
+        const easingName = typeof easingValue === 'number'
+            ? EasingNames[easingValue]
+            : easingValue;
         const easingMap: Record<string, ((k: number) => number)> = {
             // 基础缓动
             'linear': easing.linear,

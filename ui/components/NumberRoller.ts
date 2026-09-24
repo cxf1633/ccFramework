@@ -1,4 +1,4 @@
-import { _decorator, Component, easing, Enum, Label, Tween, tween } from 'cc';
+import { _decorator, Component, easing, Label, Tween, tween } from 'cc';
 import { EasingNames, EasingType } from '../../anim/BaseAnim';
 
 const { ccclass, property } = _decorator;
@@ -9,7 +9,7 @@ export interface NumberRollOptions {
     /** 本次滚动时长；不传时使用 Inspector 配置。 */
     duration?: number;
     /** 本次缓动类型；不传时使用 Inspector 配置。 */
-    easing?: EasingType;
+    easing?: string | EasingType;
     /** 自然播放完成后的回调；被新动画替换或主动停止时不调用。 */
     onComplete?: () => void;
 }
@@ -35,8 +35,8 @@ export class NumberRoller extends Component {
     @property({ tooltip: '默认滚动时长（秒）' })
     private duration: number = 0.35;
 
-    @property({ type: Enum(EasingType), tooltip: '默认缓动类型' })
-    private easingType: EasingType = EasingType.QuadOut;
+    @property({ type: String, tooltip: '默认缓动函数名，例如 quadOut、cubicOut' })
+    private easingType: string = 'quadOut';
 
     @property({ tooltip: '未设置自定义格式化函数时保留的小数位数' })
     private decimalPlaces: number = 0;
@@ -228,8 +228,9 @@ export class NumberRoller extends Component {
         return Number.isFinite(value) ? value : 0;
     }
 
-    private resolveEasing(easingType: EasingType): (progress: number) => number {
+    private resolveEasing(easingType: string | EasingType): (progress: number) => number {
         const easingFunctions = easing as unknown as Record<string, (progress: number) => number>;
-        return easingFunctions[EasingNames[easingType]] || easing.quadOut;
+        const easingName = typeof easingType === 'number' ? EasingNames[easingType] : easingType;
+        return easingFunctions[easingName] || easing.quadOut;
     }
 }

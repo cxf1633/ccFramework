@@ -1,5 +1,5 @@
-import { _decorator, tween, Vec3, Tween, Enum } from 'cc';
-import { BaseAnim, EasingType, EasingNames } from './BaseAnim';
+import { _decorator, tween, Vec3, Tween } from 'cc';
+import { BaseAnim, EasingType } from './BaseAnim';
 const { ccclass, property } = _decorator;
 
 /** 上下浮动动画 - 节点在垂直方向来回浮动，可伴随弹性伸缩 */
@@ -12,8 +12,8 @@ export class FloatUpAnim extends BaseAnim {
     @property({ tooltip: '缩放脉动幅度，0 表示浮动时不缩放' })
     scalePulse: number = 0;                    // 缩放脉动幅度（0 = 不缩放）
 
-    @property({ type: Enum(EasingType), tooltip: '缓动类型' })
-    easing: EasingType = EasingType.SineInOut;          // 缓动类型
+    @property({ type: String, tooltip: '缓动函数名，例如 sineInOut、quadInOut' })
+    easing: string = 'sineInOut';                       // 缓动类型
 
     private _originPos: Vec3 = new Vec3();
     private _originScale: Vec3 = new Vec3(1, 1, 1);
@@ -24,7 +24,7 @@ export class FloatUpAnim extends BaseAnim {
     }
 
     protected onPlay(): void {
-        const easingFn = this.getEasingFunction(EasingNames[this.easing]);
+        const easingFn = this.getEasingFunction(this.easing as string | EasingType);
 
         // 向上半程
         const upTarget = this._originPos.clone().add(new Vec3(0, this.floatDistance, 0));
