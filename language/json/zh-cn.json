@@ -58,5 +58,7 @@
     "HOT_UPDATE_STATE_SAVE_FAILED": "无法保存更新状态，请重启游戏。",
     "HOT_UPDATE_RESTARTING": "更新完成，正在重启。",
     "HOT_UPDATE_FAILED_RETRY": "更新失败，请点击确定重试。",
-    "HOT_UPDATE_FAILED_RESTART": "更新失败，请重启游戏后重试。"
+    "HOT_UPDATE_FAILED_RESTART": "更新失败，请重启游戏后重试。",
+    "STARTUP_LOAD_TITLE": "启动失败",
+    "STARTUP_LOAD_FAILED": "启动资源加载失败，请点击确定重试。"
 }

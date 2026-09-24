@@ -58,5 +58,7 @@
     "HOT_UPDATE_STATE_SAVE_FAILED": "Unable to save the update status. Please restart the game.",
     "HOT_UPDATE_RESTARTING": "Update complete. Restarting...",
     "HOT_UPDATE_FAILED_RETRY": "Update failed. Tap OK to try again.",
-    "HOT_UPDATE_FAILED_RESTART": "Update failed. Please restart the game and try again."
+    "HOT_UPDATE_FAILED_RESTART": "Update failed. Please restart the game and try again.",
+    "STARTUP_LOAD_TITLE": "Startup Error",
+    "STARTUP_LOAD_FAILED": "Failed to load startup resources. Tap OK to try again."
 }
