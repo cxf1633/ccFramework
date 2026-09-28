@@ -102,14 +102,14 @@ export class MessageManager {
     /** 删除指定 owner 注册的所有监听 */
     public removeByOwner(owner: object): void {
         if (!owner) return;
-        for (const [type, entries] of this.listeners) {
+        this.listeners.forEach((entries, type) => {
             const remaining = entries.filter(entry => entry.owner !== owner);
             if (remaining.length === 0) {
                 this.listeners.delete(type);
             } else {
                 this.listeners.set(type, remaining);
             }
-        }
+        });
     }
 }
 

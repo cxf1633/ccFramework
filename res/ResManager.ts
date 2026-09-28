@@ -200,7 +200,9 @@ export class ResManager {
             return;
         }
 
-        for (const key of [...this.prefabCache.keys()]) {
+        const keys: string[] = [];
+        this.prefabCache.forEach((_prefab, key) => keys.push(key));
+        for (const key of keys) {
             if (key.endsWith(prefabPath)) {
                 this.prefabCache.delete(key);
             }

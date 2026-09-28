@@ -193,15 +193,18 @@ export class UIManager {
     }
 
     public closeAll(layerName?: UILayerType, options: UICloseOptions = {}): void {
-        for (const opening of this.openings.values()) {
+        this.openings.forEach((opening) => {
             if (!layerName || opening.config.layer === layerName) {
                 opening.cancelled = true;
             }
-        }
+        });
 
-        const ids = [...this.instances.values()]
-            .filter((state) => !layerName || state.config.layer === layerName)
-            .map((state) => state.id);
+        const ids: string[] = [];
+        this.instances.forEach((state) => {
+            if (!layerName || state.config.layer === layerName) {
+                ids.push(state.id);
+            }
+        });
         ids.forEach((uiid) => this.removeInstance(uiid, options));
 
         if (!layerName || layerName === UILayerType.Dialog) {
@@ -481,15 +484,18 @@ export class UIManager {
     }
 
     private hasActiveInstanceInLayer(layerName: UILayerType): boolean {
-        for (const [uiid, state] of this.instances) {
+        let hasActiveInstance = false;
+        this.instances.forEach((state, uiid) => {
             if (!state.node?.isValid) {
                 this.instances.delete(uiid);
                 this.destroyInputBlocker(state);
-                continue;
+                return;
             }
-            if (state.config.layer === layerName && state.node.active) return true;
-        }
-        return false;
+            if (state.config.layer === layerName && state.node.active) {
+                hasActiveInstance = true;
+            }
+        });
+        return hasActiveInstance;
     }
 
     private initUIConfigs(configs?: Record<string, UIConfig>): void {
@@ -594,13 +600,13 @@ export class UIManager {
             previousSiblingIndex = siblingIndex;
         }
 
-        for (const [uiid, state] of this.instances) {
+        this.instances.forEach((state, uiid) => {
             const layerNode = resolvedLayerNodes.get(state.config.layer);
             if (!state.node?.isValid || state.node.parent !== layerNode) {
                 this.instances.delete(uiid);
                 this.destroyInputBlocker(state);
             }
-        }
+        });
         this.layerNodes.clear();
         this.boundGuiNode = guiNode;
         this.layerOrder.forEach((layerName) => {
