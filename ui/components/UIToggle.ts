@@ -9,8 +9,10 @@ export interface UIToggleGroupLike {
 @ccclass("UIToggle")
 @requireComponent(Button)
 export class UIToggle extends Component {
-    @property(Node)
+    @property({ type: Node, tooltip: "选中状态显示的节点（例如对勾 / 高亮图标），留空则自动查找名为 Select 的子节点" })
     public selectNode: Node | null = null;
+    @property({ type: Node, tooltip: "未选中状态显示的节点（例如空白 / 默认图标）" })
+    public unselectNode: Node | null = null;
 
     private group: UIToggleGroupLike | null = null;
     private selected = false;
@@ -50,6 +52,9 @@ export class UIToggle extends Component {
         this.selected = selected;
         if (this.selectNode?.isValid) {
             this.selectNode.active = selected;
+        }
+        if (this.unselectNode?.isValid) {
+            this.unselectNode.active = !selected;
         }
     }
 

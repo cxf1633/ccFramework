@@ -2,6 +2,7 @@ import { AudioClip, Node } from "cc";
 import { Logger } from "../log/Logger";
 import { ResManager } from "../res/ResManager";
 import { UIButton } from "../ui/components/UIButton";
+import { UIClickSound } from "../ui/components/UIClickSound";
 import { AudioManager } from "./AudioManager";
 
 export type AudioType = "music" | "sound";
@@ -57,6 +58,7 @@ export class AudioService {
         this.audioManager.createChannel(MUSIC_CHANNEL);
         this.audioManager.createChannel(SOUND_CHANNEL);
         UIButton.setClickSoundPlayer((clip) => this.playButtonSound(clip));
+        UIClickSound.setClickSoundPlayer((clip) => this.playButtonSound(clip));
 
         const preloadResources = options.preloadResources || [];
         void this.preloadResourceAudios(preloadResources).catch((error) => {
@@ -68,6 +70,7 @@ export class AudioService {
     public dispose(): void {
         this.musicPlayVersion++;
         UIButton.setClickSoundPlayer(null);
+        UIClickSound.setClickSoundPlayer(null);
         this.audioManager.dispose();
         this.resourceAudioClips.clear();
         this.resourceAudioLoading.clear();
@@ -217,7 +220,7 @@ export class AudioService {
         }
     }
 
-    /** 播放 UIButton 指定的音效，未指定时使用项目注入的默认音效。 */
+    /** 播放 UI 按钮（UIButton / UIClickSound）指定的音效，未指定时使用项目注入的默认音效。 */
     private playButtonSound(clip: AudioClip | null): void {
         if (clip?.isValid) {
             this.playSoundClip(clip);

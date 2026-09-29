@@ -1,5 +1,5 @@
 import { _decorator } from 'cc';
-import { ScaleAnim } from '../anim/ScaleAnim';
+import { ScaleAnim } from './tweenAnim/ScaleAnim';
 import { UILayer } from './UILayer';
 
 const { ccclass } = _decorator;

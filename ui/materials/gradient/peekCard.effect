@@ -1,0 +1,242 @@
+// Copyright (c) 2017-2020 Xiamen Yaji Software Co., Ltd.
+CCEffect %{
+  techniques:
+  - passes:
+    - vert: sprite-vs:vert
+      frag: sprite-fs:frag
+      depthStencilState:
+        depthTest: false
+        depthWrite: false
+      blendState:
+        targets:
+        - blend: true
+          blendSrc: src_alpha
+          blendDst: one_minus_src_alpha
+          blendDstAlpha: one_minus_src_alpha
+      rasterizerState:
+        cullMode: none
+      properties:
+        alphaThreshold: { value: 0.5 }
+        faceTexture: { value: white }                                        
+        faceUVFlip: { value: [-1.0, 1.0] }                                   
+        touchPos: { value: [1.0, 1.0] }                                      
+        cornerPos: { value: [1.0, 1.0] }                                     
+        radius: { value: 0.1 }                                               
+        paddingData: { value: [0.0, 0.0, 100.0, 100.0] }  
+        faceUVRect: { value: [0.0, 0.0, 1.0, 1.0] }
+}%
+
+CCProgram sprite-vs %{
+  precision highp float;
+  #include <builtin/uniforms/cc-global>
+  #if USE_LOCAL
+    #include <builtin/uniforms/cc-local>
+  #endif
+  #if SAMPLE_FROM_RT
+    #include <common/common-define>
+  #endif
+  in vec3 a_position;
+  in vec2 a_texCoord;
+  in vec4 a_color;
+
+  out vec4 color;
+  out vec2 uv0;
+
+  // ================== [新增] 顶点参数区 ==================
+  // 专门接收从脚本发来的防被裁切用的大小扩张数据
+  uniform PeekVSUniforms {
+      vec4 paddingData;
+  };
+  // =======================================================
+
+  vec4 vert () {
+    vec4 pos = vec4(a_position, 1);
+
+    // ================== [新增] 顶点几何扩充 ==================
+    // 根据当前所在四边形四个角的方位（根据UV判断），强行往外拉扯 pos.xy，把网格给物理上强行撑大
+    float signX = a_texCoord.x < 0.5 ? -1.0 : 1.0;
+    float signYPos = a_texCoord.y < 0.5 ? 1.0 : -1.0; 
+    
+    pos.x += signX * paddingData.x;
+    pos.y += signYPos * paddingData.y;
+    // =======================================================
+
+    #if USE_LOCAL
+      pos = cc_matWorld * pos;
+    #endif
+
+    #if USE_PIXEL_ALIGNMENT
+      pos = cc_matView * pos;
+      pos.xyz = floor(pos.xyz);
+      pos = cc_matProj * pos;
+    #else
+      pos = cc_matViewProj * pos;
+    #endif
+
+    // ================== [修改] UV 重映射 ==================
+    // 因为这块纸变大了，我们必须把 UV 给同样缩放过去，不然贴图会被强行拉伸变丑！
+    // 扩展后，新计算得到的局部 UV 值会超过常规的 0.0~1.0 范围，进入透明缓冲区
+    uv0 = a_texCoord;
+    float w = max(paddingData.z, 1.0);
+    float h = max(paddingData.w, 1.0);
+    
+    float signYUV = a_texCoord.y < 0.5 ? -1.0 : 1.0; 
+    uv0.x += signX * (paddingData.x / w);
+    uv0.y += signYUV * (paddingData.y / h);
+    // =====================================================
+
+    #if SAMPLE_FROM_RT
+      CC_HANDLE_RT_SAMPLE_FLIP(uv0);
+    #endif
+    color = a_color;
+
+    return pos;
+  }
+}%
+
+CCProgram sprite-fs %{
+  precision highp float;
+  #include <builtin/internal/embedded-alpha>
+  #include <builtin/internal/alpha-test>
+
+  in vec4 color;
+
+  #if USE_TEXTURE
+    in vec2 uv0;
+    #pragma builtin(local)
+    layout(set = 2, binding = 12) uniform sampler2D cc_spriteTexture;
+    
+    // ================== [新增] 贴图与参数声明 ==================
+    uniform sampler2D faceTexture; 
+
+    uniform PeekUniforms {
+      vec2 faceUVFlip;
+      vec2 touchPos;
+      vec2 cornerPos;
+      float radius;
+      float _pad0;       // 4  👉补齐16字节
+      vec4 faceUVRect;
+    };
+    // =======================================================
+  #endif
+
+  vec4 frag () {
+    vec4 o = vec4(1.0, 1.0, 1.0, 1.0);
+
+    #if USE_TEXTURE
+      vec2 uv = uv0;
+      float D = distance(cornerPos, touchPos);
+      
+      // ================== [修改] 核心颜色的获取（替换原基础采样法） ==================
+      // builtin-sprite 以前的做法很简单粗暴，直接是 o *= sample(uv0);
+      
+      // 如果还没人去拖拽它，退回普通渲染（但因为前面的顶点被扩大了，这里得防边缘色外溢）
+      if (D < 0.001) {
+          // 只渲染安全的 [0, 1] 核心图区间，外部扩出来防切断用的废料区填为全透明
+          if (uv.x >= 0.0 && uv.x <= 1.0 && uv.y >= 0.0 && uv.y <= 1.0) {
+              o *= CCSampleWithAlphaSeparated(cc_spriteTexture, uv);
+          } else {
+              o = vec4(0.0);
+          }
+      } else {
+          // --------------- [完全新增] 3D卷曲物理数学模型 ---------------
+          vec2 dir = normalize(cornerPos - touchPos);
+          float R = min(radius, D / 3.14159265);
+          vec2 M = (cornerPos + touchPos) * 0.5;
+          vec2 A = M - (3.14159265 * R * 0.5) * dir;
+          float x = dot(uv - A, dir);
+          vec2 p_perp = uv - A - x * dir;
+
+          vec4 finalColor = vec4(0.0);
+          vec4 c = vec4(0.0);
+          float invA = 1.0;
+          vec2 p = vec2(0.0);
+          
+          if (x <= 0.0) {
+              // 第一层：向背面完全翻平的部分 -> 查正面贴图
+              p = A + (3.14159265 * R - x) * dir + p_perp;
+              if (p.x >= 0.0 && p.x <= 1.0 && p.y >= 0.0 && p.y <= 1.0) {
+                  vec2 p_face = vec2(faceUVFlip.x < 0.0 ? 1.0 - p.x : p.x, faceUVFlip.y < 0.0 ? 1.0 - p.y : p.y);
+                  vec2 atlasUV = faceUVRect.xy + p_face * faceUVRect.zw;
+                  c = CCSampleWithAlphaSeparated(faceTexture, atlasUV);
+                  
+                  // 第一层染成红色 (Red)
+                  // c.rgb = mix(c.rgb, vec3(1.0, 0.0, 0.0), 0.5);
+                  
+                  invA = 1.0 - finalColor.a;
+                  finalColor.rgb += c.rgb * c.a * invA;
+                  finalColor.a += c.a * invA;
+              }
+          } else if (x <= R) {
+              float nx = clamp(x / R, 0.0, 1.0);
+              float nz = sqrt(1.0 - nx * nx); 
+              
+              // 第二层：圆柱顶面（面向眼睛的外弧面） -> 查正面贴图，带微高光
+              p = A + (3.14159265 * R - R * asin(nx)) * dir + p_perp;
+              if (p.x >= 0.0 && p.x <= 1.0 && p.y >= 0.0 && p.y <= 1.0) {
+                  vec2 p_face = vec2(faceUVFlip.x < 0.0 ? 1.0 - p.x : p.x, faceUVFlip.y < 0.0 ? 1.0 - p.y : p.y);
+                  vec2 atlasUV = faceUVRect.xy + p_face * faceUVRect.zw;
+                  c = CCSampleWithAlphaSeparated(faceTexture, atlasUV);
+                  c.rgb *= mix(0.9, 1.0, nz);
+                  
+                  // 第二层圆柱体外侧染成绿色 (Green)
+                  // c.rgb = mix(c.rgb, vec3(0.0, 1.0, 0.0), 0.5);
+                  
+                  invA = 1.0 - finalColor.a;
+                  finalColor.rgb += c.rgb * c.a * invA;
+                  finalColor.a += c.a * invA;
+              }
+
+              // 第三层：圆柱底面（被埋起来的内弧面） -> 查原始牌背，带纯阴影
+              p = A + (R * asin(nx)) * dir + p_perp;
+              if (p.x >= 0.0 && p.x <= 1.0 && p.y >= 0.0 && p.y <= 1.0) {
+                  c = CCSampleWithAlphaSeparated(cc_spriteTexture, p);
+                  c.rgb *= mix(0.5, 0.8, nz);
+                  
+                  // 第三层圆柱体内测被压着的阴影区染成蓝色 (Blue)
+                  // c.rgb = mix(c.rgb, vec3(0.0, 0.0, 1.0), 0.5);
+                  
+                  invA = 1.0 - finalColor.a;
+                  finalColor.rgb += c.rgb * c.a * invA;
+                  finalColor.a += c.a * invA;
+              }
+          }
+
+          if (x <= 0.0) {
+              // 第四层：没掀起来一直被按在平地上的底座 -> 查原始牌背
+              p = A + x * dir + p_perp;
+              if (p.x >= 0.0 && p.x <= 1.0 && p.y >= 0.0 && p.y <= 1.0) {
+                  c = CCSampleWithAlphaSeparated(cc_spriteTexture, p);
+                  
+                  // 为根部加一点 AO 环境光阴影
+                  float shadowVal = mix(0.5, 1.0, clamp(-x / 0.1, 0.0, 1.0));
+                  c.rgb *= shadowVal;
+                  
+                  // 第四层平地上的底座染成黄色 (Yellow)
+                  // c.rgb = mix(c.rgb, vec3(1.0, 1.0, 0.0), 0.5);
+                  
+                  invA = 1.0 - finalColor.a;
+                  finalColor.rgb += c.rgb * c.a * invA;
+                  finalColor.a += c.a * invA;
+              }
+          }
+          
+          if (finalColor.a > 0.0) {
+              finalColor.rgb /= finalColor.a;
+          }
+          o *= finalColor;
+      }
+      // =========================================================================
+      
+      #if IS_GRAY
+        // 灰色滤镜保护处理
+        float gray  = 0.2126 * o.r + 0.7152 * o.g + 0.0722 * o.b;
+        o.r = o.g = o.b = gray;
+      #endif
+    #endif
+
+    o *= color;
+    ALPHA_TEST(o);
+    return o;
+  }
+}%

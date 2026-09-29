@@ -64,4 +64,39 @@ export class StringUtils {
     private static digitToChinese(digit: number): string {
         return this.CHINESE_DIGITS[digit] ?? String(digit);
     }
+
+    /**
+ * 根据权重长度截取字符串（汉字算 2，英文字符算 1），超出部分替换为省略号。
+ * 不依赖 Label 组件，直接返回截取后的纯文本。
+ * @param str 原字符串
+ * @param maxLimit 最大权重长度（如 12 表示 6 个汉字或 12 个英文字符）
+ * @param ellipsis 省略号内容，默认为 "…"
+ * @returns 截取后的字符串，未超限时原样返回
+ */
+    public static subStringByWeight(str: string, maxLimit: number = 12, ellipsis: string = "…"): string {
+        if (!str) {
+            return '';
+        }
+
+        let weightLen = 0;
+        let cutIndex = 0;
+        const trimmedStr = str.trim();
+
+        for (let i = 0; i < trimmedStr.length; i++) {
+            const charWeight = trimmedStr.charCodeAt(i) > 255 ? 2 : 1;
+
+            if (weightLen + charWeight > maxLimit) {
+                break;
+            }
+
+            weightLen += charWeight;
+            cutIndex = i + 1;
+        }
+
+        if (cutIndex < trimmedStr.length) {
+            return trimmedStr.substring(0, cutIndex) + ellipsis;
+        }
+
+        return trimmedStr;
+    }
 }

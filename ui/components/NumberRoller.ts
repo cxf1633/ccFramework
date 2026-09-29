@@ -1,5 +1,5 @@
 import { _decorator, Component, easing, Label, Tween, tween } from 'cc';
-import { EasingNames, EasingType } from '../../anim/BaseAnim';
+import { EasingNames, EasingType } from '../tweenAnim/BaseAnim';
 
 const { ccclass, property } = _decorator;
 

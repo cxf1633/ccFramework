@@ -11,15 +11,15 @@ export class AsyncUtils {
      */
     static WaitForSeconds(component: Component, seconds: number): Promise<boolean> {
         return new Promise((resolve) => {
-            let timeoutId: number = -1;
+            let timeoutId: ReturnType<typeof setTimeout> | null = null;
             let isResolved = false;
             const node = component.node;
             const nodeDestroyedEvent = (Node.EventType as any).NODE_DESTROYED;
 
             function cleanup() {
-                if (timeoutId !== -1) {
+                if (timeoutId !== null) {
                     clearTimeout(timeoutId);
-                    timeoutId = -1;
+                    timeoutId = null;
                 }
                 if (node?.isValid) {
                     node.off(Node.EventType.ACTIVE_IN_HIERARCHY_CHANGED, onActiveChanged);
