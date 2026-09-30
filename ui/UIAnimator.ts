@@ -1,4 +1,4 @@
-import { Color, Node, Sprite, Tween, TweenEasing, UIOpacity, Widget, tween } from 'cc';
+import { Color, Node, Sprite, Tween, TweenEasing, UIRenderer, Widget, tween } from 'cc';
 
 /** UI 动画类型枚举：3 个入口（playOne / play / playMany）共用 */
 export enum UIAnimType {
@@ -332,15 +332,23 @@ export class UIAnimator {
         });
     }
 
-    /** 构建 OPACITY：通过父节点 UIOpacity 让整棵 UI 子树从透明渐变到不透明。 */
-    private static _buildOpacity(node: Node, anim: UIAnimOption): Tween<any> {
+    /** 构建 OPACITY：保留各 UIRenderer 的 RGB，仅渐变 color.a。 */
+    private static _buildOpacity(node: Node, anim: UIAnimOption): Tween<any> | null {
+        const renderers = node.getComponentsInChildren(UIRenderer);
+        if (renderers.length === 0) {
+            return null;
+        }
+
         const duration = anim.duration ?? UIAnimator.DEFAULT_DURATION;
         const delay = anim.delay ?? 0;
-        const fromOpacity = anim.fromOpacity ?? 0;
-        const toOpacity = anim.toOpacity ?? 255;
-        const opacity = node.getComponent(UIOpacity) ?? node.addComponent(UIOpacity);
+        const fromOpacity = Math.max(0, Math.min(255, anim.fromOpacity ?? 0));
+        const toOpacity = Math.max(0, Math.min(255, anim.toOpacity ?? 255));
+        const colors = renderers.map((renderer) => renderer.color.clone());
 
-        opacity.opacity = fromOpacity;
+        renderers.forEach((renderer, index) => {
+            colors[index].a = fromOpacity;
+            renderer.color = colors[index];
+        });
         const proxy = { opacity: fromOpacity };
         let tw: Tween<any> = tween(proxy);
         if (delay > 0) {
@@ -349,13 +357,20 @@ export class UIAnimator {
         return tw.to(duration, { opacity: toOpacity }, {
             easing: anim.easing ?? UIAnimator.DEFAULT_EASING,
             onUpdate: (state: any) => {
-                if (!UIAnimator._alive(node) || !opacity.isValid) return;
-                opacity.opacity = state.opacity;
+                if (!UIAnimator._alive(node)) return;
+                renderers.forEach((renderer, index) => {
+                    if (!renderer.isValid) return;
+                    colors[index].a = state.opacity;
+                    renderer.color = colors[index];
+                });
             },
         }).call(() => {
-            if (node.isValid && opacity.isValid) {
-                opacity.opacity = toOpacity;
-            }
+            if (!node.isValid) return;
+            renderers.forEach((renderer, index) => {
+                if (!renderer.isValid) return;
+                colors[index].a = toOpacity;
+                renderer.color = colors[index];
+            });
         });
     }
 
