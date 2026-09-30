@@ -97,12 +97,17 @@ export class ProgressTimer extends Component {
      * @param onComplete 完成后的回调
      */
     public startTimer(leftTime: number, totalTime: number, onComplete?: Function, isCountDown: boolean = true,) {
-        this._leftTime = leftTime;
-        this._totalTime = totalTime;
+        const safeLeftTime = Number.isFinite(leftTime) ? Math.max(0, leftTime) : 0;
+        const safeTotalTime = Number.isFinite(totalTime) && totalTime > 0
+            ? totalTime
+            : safeLeftTime;
+
+        this._totalTime = safeTotalTime;
+        this._leftTime = Math.min(safeLeftTime, safeTotalTime);
         this._isCountDown = isCountDown;
         this._currentTime = isCountDown ? this._leftTime : 0;
         this._callback = onComplete || null;
-        this._isCounting = true;
+        this._isCounting = this._leftTime > 0 && this._totalTime > 0;
 
         this.progressSprites.forEach(sprite => {
             sprite.color = this.startColor;
@@ -124,15 +129,17 @@ export class ProgressTimer extends Component {
 
     private updateVisuals() {
 
-        if (this._isCountDown) {
+        let progress = 0;
+        if (this._totalTime > 0 && this._isCountDown) {
             // 1 - 0
             // Logger.trace(` 倒计时 进度 ${this._currentTime} / ${this._totalTime}`)
-            this.tempProgress = this._leftTime > 0 ? this._currentTime / this._totalTime : 0;
+            progress = this._currentTime / this._totalTime;
         }
-        else {
+        else if (this._totalTime > 0) {
             // 0  -  -1
-            this.tempProgress = this._leftTime > 0 ? (this._totalTime - this._currentTime) / this._totalTime : 0;
+            progress = (this._totalTime - this._currentTime) / this._totalTime;
         }
+        this.tempProgress = Math.max(0, Math.min(1, Number.isFinite(progress) ? progress : 0));
         // 基础进度比例 (0 到 1)
 
 

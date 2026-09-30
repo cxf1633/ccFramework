@@ -1,5 +1,4 @@
 import { _decorator, Color } from 'cc';
-import { Logger } from '../../../../extensions/oops-plugin-framework/assets/core/common/log/Logger';
 import { BaseMaterrialController } from './BaseMaterrialController';
 import { Vec4 } from 'cc';
 const { ccclass, property } = _decorator;

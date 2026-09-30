@@ -1,6 +1,4 @@
 import { _decorator, Component, Sprite, Color, Material } from 'cc';
-import { Logger } from '../../../../extensions/oops-plugin-framework/assets/core/common/log/Logger';
-import { Label } from 'cc';
 import { UIRenderer } from 'cc';
 const { ccclass, property, executeInEditMode } = _decorator;
 

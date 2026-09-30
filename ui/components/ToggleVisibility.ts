@@ -19,6 +19,7 @@ export class ToggleVisibility extends Component {
     @property({
         tooltip: "是否反向逻辑（选中时隐藏，未选中时显示）"
     })
+    public reverse: boolean = false;
 
     private _toggle: Toggle | null = null;
 
@@ -52,17 +53,17 @@ export class ToggleVisibility extends Component {
      * 更新物体显示状态
      */
     private updateVisibility(isChecked: boolean) {
-        // 根据选中状态和反向逻辑决定是否显示
+        const active = this.reverse ? !isChecked : isChecked;
 
         this.activeNodes.forEach(node => {
             if (node && node.isValid) {
-                node.active = isChecked;
+                node.active = active;
             }
         });
 
         this.unactiveNodes.forEach(node => {
             if (node && node.isValid) {
-                node.active = !isChecked;
+                node.active = !active;
             }
         });
     }

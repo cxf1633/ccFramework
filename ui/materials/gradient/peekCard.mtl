@@ -27,10 +27,6 @@
   ],
   "_props": [
     {
-      "faceTexture": {
-        "__uuid__": "ea212802-b236-413f-92ac-21def1c8c0ff@6c48a",
-        "__expectedType__": "cc.Texture2D"
-      },
       "faceUVFlip": {
         "__type__": "cc.Vec2",
         "x": 1,

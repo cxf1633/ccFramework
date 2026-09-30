@@ -21,6 +21,7 @@ export class SliderBar extends Component {
 
     private slider: Slider | null = null;
     private lastProgress: number = -1;
+    private lastProgressVal: number = Number.NaN;
     private progressVal: number = 0;
 
     // 动画状态
@@ -48,18 +49,24 @@ export class SliderBar extends Component {
 
         if (!this.slider) return;
 
-        const targetProgress = progress / maxProgress;
+        const hasValidRange = Number.isFinite(maxProgress) && maxProgress > 0;
+        const safeProgress = hasValidRange && Number.isFinite(progress)
+            ? Math.max(0, Math.min(progress, maxProgress))
+            : 0;
+        const targetProgress = hasValidRange ? safeProgress / maxProgress : 0;
 
-        if (animated) {
+        if (animated && this.animDuration > 0) {
             this._animStart = 0;
             this._animFrom = this.slider.progress;
             this._animTo = targetProgress;
             this._animValFrom = this.progressVal;
-            this._animValTo = progress;
+            this._animValTo = safeProgress;
             this._isAnimating = true;
         } else {
             this.slider.progress = targetProgress;
-            this.progressVal = progress;
+            this.progressVal = safeProgress;
+            this._isAnimating = false;
+            this.updateProgress(targetProgress);
         }
     }
 
@@ -71,8 +78,9 @@ export class SliderBar extends Component {
     }
 
     private updateProgress(progress: number) {
-        if (this.lastProgress == progress) return;
+        if (this.lastProgress === progress && this.lastProgressVal === this.progressVal) return;
         this.lastProgress = progress;
+        this.lastProgressVal = this.progressVal;
         if (this.fillSprite)
             this.fillSprite.fillRange = progress;
         if (this.progressBar)

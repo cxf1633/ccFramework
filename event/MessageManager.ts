@@ -5,6 +5,12 @@ import { Logger } from "../log/Logger";
  */
 export type MessageHandler = (this: any, type: string, message: any) => void;
 
+/** 服务端推送的协议号（主协议 / 子协议），只用于日志展示。 */
+export interface MessageProtocol {
+    main?: number;
+    sub?: number;
+}
+
 interface MessageListenerEntry {
     handler: MessageHandler;
     owner?: object;
@@ -76,11 +82,21 @@ export class MessageManager {
         }
     }
 
-    public dispatchMessage(messageType: string, message: any = null): void {
+    /**
+     * 派发消息。
+     *
+     * @param messageType 消息类型
+     * @param message 消息数据
+     * @param protocol 协议号（服务端推送才有）：主协议 / 子协议，只用于日志
+     */
+    public dispatchMessage(messageType: string, message: any = null, protocol?: MessageProtocol): void {
         const entries = this.listeners.get(messageType);
 
         // Logger.netLog("[事件消息]", messageType, message);
-        Logger.netLog("[事件消息]", messageType, ...(message == null ? [] : [JSON.stringify(message)]));
+        const protocolText = protocol && protocol.main != null && protocol.sub != null
+            ? `${protocol.main}/${protocol.sub} `
+            : '';
+        Logger.netLog(`[事件消息] ${protocolText}${messageType}`, ...(message == null ? [] : [JSON.stringify(message)]));
 
         if (entries && entries.length > 0) {
             entries.slice().forEach((entry) => {

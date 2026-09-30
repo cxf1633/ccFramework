@@ -1,7 +1,6 @@
 import { SpriteFrame } from 'cc';
 import { Vec3 } from 'cc';
 import { _decorator, Component, Sprite, EventTouch, Vec2, UITransform, v2, v3, v4, Node } from 'cc';
-import { Logger } from 'db://oops-framework/core/common/log/Logger';
 const { ccclass, property } = _decorator;
 
 @ccclass('PeekCardController')

@@ -1,5 +1,4 @@
 import { _decorator, Component, Sprite, Color, Material } from 'cc';
-import { Logger } from '../../../../extensions/oops-plugin-framework/assets/core/common/log/Logger';
 import { BaseMaterrialController } from './BaseMaterrialController';
 const { ccclass, property, executeInEditMode } = _decorator;
 

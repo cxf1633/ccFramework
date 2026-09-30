@@ -82,7 +82,13 @@ export class VirtualGridList extends Component {
      * 等节点激活（`onLoad` 跑完）后再正常刷新。
      */
     private isScrollViewReady(): boolean {
-        if (this._scrollView?.isValid) {
+        if (
+            this._scrollView?.isValid
+            && this._content?.isValid
+            && this._contentUITrans?.isValid
+            && this._scrollView.view?.isValid
+            && this._scrollView.view.getComponent(UITransform)
+        ) {
             this._warnedScrollViewMissing = false;
             return true;
         }
@@ -114,12 +120,22 @@ export class VirtualGridList extends Component {
     // ─────────────────────────────────────────────────────────────────────────
 
     onLoad() {
+        const scrollView = this.node.getComponent(ScrollView);
+        const content = scrollView?.content ?? null;
+        const view = scrollView?.view ?? null;
+        const contentTrans = content?.getComponent(UITransform) ?? null;
+        const viewTrans = view?.getComponent(UITransform) ?? null;
 
-        this._scrollView = this.node.getComponent(ScrollView)!;
-        this._content = this._scrollView.content!;
-        this._contentUITrans = this._content.getComponent(UITransform)!;
+        if (!scrollView || !content || !view || !contentTrans || !viewTrans) {
+            this._warnedScrollViewMissing = true;
+            warn(`[VirtualGridList] ${this.node.name} 配置不完整，需要 ScrollView、view、content 及其 UITransform`);
+            this._pendingRefresh = true;
+            return;
+        }
 
-        const viewTrans = this._scrollView.view!.getComponent(UITransform)!;
+        this._scrollView = scrollView;
+        this._content = content;
+        this._contentUITrans = contentTrans;
         this._viewSize.set(viewTrans.width, viewTrans.height);
 
         this._contentUITrans.anchorX = 0;

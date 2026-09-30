@@ -20,7 +20,7 @@ Framework.LanguageMgr;
 当前入口暴露的能力包括：
 
 - `ResourcesMgr`：资源、Bundle、Prefab、远程图片加载与缓存。
-- `AudioMgr`：音乐、音效、资源缓存、音量和静音状态管理，支持 Cocos 与微信原生音频后端。
+- `AudioMgr`：基于 Cocos `AudioSource` 的音乐、音效、资源缓存、音量和静音状态管理。
 - `SceneMgr`：场景加载与 Bundle 场景预加载。
 - `UIMgr`：注册式 UI 打开、关闭、预加载与层级管理。
 - `EventManager`：基于 Cocos `Node` 的全局事件。
@@ -34,8 +34,7 @@ Framework.LanguageMgr;
 
 ```text
 assets/framework
-├── anim/       声明式 Tween 动画组件（BaseAnim 基类 + 位移/缩放/旋转/淡入淡出等效果组件）
-├── audio/      音频通道管理，支持 Cocos AudioSource 与微信原生音频后端
+├── audio/      基于 Cocos AudioSource 的音频通道、资源缓存与 UI 点击音效桥接
 ├── base/       基础类型，如 Singleton
 ├── event/      全局事件与本地消息总线
 ├── http/       XMLHttpRequest JSON 请求封装
@@ -47,7 +46,11 @@ assets/framework
 ├── scene/      场景加载与预加载
 ├── storage/    本地存储封装
 ├── tools/      框架侧工具入口与框架语言 Excel
-├── ui/         UI 层级、窗口生命周期、UIBase 基类、复用组件和 UI 异步辅助
+├── ui/         UI 层级、窗口生命周期、复用组件、材质效果、Tween 动画和异步辅助
+│   ├── async/       依赖组件/节点生命周期的异步辅助
+│   ├── components/  下拉框、滑条、虚拟列表、验证码、标签系统等复用组件
+│   ├── materials/   UI Shader 与材质资源
+│   └── tweenAnim/   声明式 Tween 动画组件
 └── utils/      通用工具函数
 ```
 
@@ -92,15 +95,25 @@ Game -> UI -> PopUp -> Dialog -> Toast -> System -> Guide
 组件启用时为当前渲染器创建独立材质实例，业务代码可通过 `setColors(startColor, endColor)`
 更新颜色，不会修改共享材质，也不会在运行时逐帧刷新材质属性。
 
-`ui/materials/edge-fade/` 提供**双边渐隐**材质：中间完全显示，两侧平滑过渡到全透明，
-用来替代 `Mask` 做「内容到边界淡出」。原因是 `Mask` 走 stencil 模板测试，每个像素只有
-通过/丢弃两种结果，边缘一定是硬边，改材质也无法软化。预设材质 `mat-edge-fade-h`（左右渐隐）
-与 `mat-edge-fade-v`（上下渐隐）直接拖到 Sprite/Label 的 `CustomMaterial` 槽位即可，
-参数全部在 Inspector 调整，不需要写脚本：`edgeSoftness` 为两侧渐隐宽度占比（0 关闭，最大 0.5），
-`fadeDirection` 0 为上下 / 1 为左右，`uvRect` 为图集内 UV 范围（单图保持 0,0,1,1）。
-两个限制：材质是共享资源，多个节点需要不同参数时各复制一份；渐隐按**每个渲染器自身的 UV**
-计算，挂到多个子节点上会变成各自渐隐，要让一组子节点整体渐隐需先渲染到 RenderTexture
-再对该 RT 应用此材质（此时在材质 Defines 中勾选 `SAMPLE_FROM_RT` 修正上下翻转）。
+`ui/materials/gradient/` 还包含流光、扫光、外发光、翻牌和灰度等 Shader/材质资源。
+`BaseMaterrialController`、`FlashLightController`、`GradientController`、`PeekCardController` 和
+`SpriteGlowOutterController` 是本次同步带入的配套控制器。`GradientController` 的材质需要在
+Inspector 中显式绑定 `ui/materials/gradient/gradient.mtl`；`PeekCardController.setFace()` 会在运行时
+注入牌面纹理，各控制器不依赖来源项目的日志模块。
+
+### 通用 UI 组件
+
+- `CaptchaView`：本地字符验证码绘制，也可展示服务端下发的 PNG Base64 图片；服务端模式通过 `setCode()`、`setServerImage()` 和 `setOnRequestNewCode()` 接入。
+- `DropDown/Dropdown`：动态选项下拉框，支持运行时增删选项、共享 List、边界翻转、选中状态和变更回调。
+- `FollowTarget`：按配置跟随目标节点的位置、旋转和缩放。
+- `ProgressTimer`：圆形/半圆填充计时器，支持文字、颜色过渡和沿圆环移动的圆点。
+- `SliderBar`：同步 `Slider`、`ProgressBar`、填充 Sprite 与数值文本，可动画设置进度。
+- `UIStepSlider`：离散档位滑条，支持刻度、档位文本、填充尺寸同步和 `step-changed` 事件。
+- `VirtualGridList`：基于 `ScrollView` 的网格虚拟列表，复用可见单元格，并提供边界与可见范围回调。
+- `UIToggle` / `UIToggleGroup`：轻量页签组，支持选中/未选中节点以及一对一、一对多、多对多 Panel 映射。
+- `ToggleVisibility`：根据原生 `Toggle` 状态切换两组节点的显隐。
+- `UIClickSound`：为原生 `Button` / `Toggle` 接入框架点击音效和防连点；不要与 `UIButton` 挂在同一节点。
+- `tagSystem/TagNode` / `TagGroup`：按字符串域和标签控制指定子树内节点显隐，多套标签系统互不干扰。
 
 `ui/components/UIRadarChart.ts` 依赖同节点的 `Graphics`，按传入的归一化数值绘制雷达图的
 多边形数据区域。轴的数量和顶点位置由 `axisNodes` 决定：节点数量即多边形边数，每个节点的位置
@@ -200,6 +213,12 @@ Framework.MessageManager.dispatchMessage("message-type", payload);
 off();
 ```
 
+服务端推送需要在日志中携带协议号时，可传第三个可选参数：
+
+```ts
+Framework.MessageManager.dispatchMessage("message-type", payload, { main: 100, sub: 1001 });
+```
+
 消息总线支持：
 
 - `on`
@@ -246,17 +265,14 @@ await Framework.SceneMgr.preloadScene("gameBundle", "gameScene");
 - 一次性音效播放：`playOneShot`
 - 停止所有音频与释放资源
 
-音频后端支持：
-
-- `cocos`：使用 Cocos `AudioSource`。
-- `native`：使用微信 `InnerAudioContext`。
-- `auto`：在微信小游戏/小程序环境下走原生音频，否则走 Cocos。
+当前音频后端统一使用 Cocos `AudioSource`。`AudioService.initialize()` 会同时向 `UIButton` 和
+`UIClickSound` 注入点击音效播放器，`dispose()` 时解除桥接。
 
 ## 动画组件
 
-`anim/` 提供声明式 Tween 动画组件，直接挂到节点上，在 Inspector 里配置参数即可：
+`ui/tweenAnim/` 提供声明式 Tween 动画组件，直接挂到节点上，在 Inspector 里配置参数即可：
 
-- `BaseAnim`：抽象基类，统一 `playOnEnable` / `duration` / `delay` / `loop` 属性和 `play()` / `replay()` / `stop()` 生命周期；导出 `EasingType` 枚举（Inspector 下拉选择缓动曲线）与 `EasingNames` 映射。
+- `BaseAnim`：抽象基类，统一 `playOnEnable` / `duration` / `delay` / `loop` 属性和 `play()` / `replay()` / `stop()` 生命周期；缓动曲线由具体组件填写 Cocos easing 名称，`EasingType` / `EasingNames` 仅用于旧预制体数值兼容。
 - `FadeAnim`：透明度淡入淡出，支持停留时间。
 - `MoveAnim`：从 `from` 移动到 `to`，默认局部坐标，可切换世界坐标。
 - `RotateAnim`：绕 Z 轴旋转指定角度。
@@ -264,6 +280,7 @@ await Framework.SceneMgr.preloadScene("gameBundle", "gameScene");
 - `FloatUpAnim`：上下往返浮动，可叠加缩放脉动。
 - `JellyJumpAnim`：果冻弹跳（弹起、落地压扁、衰减抖动）。
 - `BellShakeAnim`：铃铛式左右衰减摆动。
+- `VolcanoEruptAnim`：预震、膨胀、喷发和后坐组合动画，播放完成或停止时恢复初始位置与缩放。
 
 组件在 `onEnable` 时按 `playOnEnable` 自动播放，`onDisable` 自动停止；循环动画停止后会停在该节点当时的变换状态，带 `_originPos` / `_originScale` 缓存的组件（`FloatUpAnim` 等）会还原到初始变换。
 
@@ -278,6 +295,7 @@ await Framework.SceneMgr.preloadScene("gameBundle", "gameScene");
 - `AesUtils`：AES-CBC-PKCS7 加密/解密。
 - `ZlibUtils`：字符串压缩、解压，以及 Base64 编解码 polyfill。
 - `NumberFormatUtils`：筹码/数量格式化，支持 K/M/B 单位和小数格式控制。
+- `StringUtils`：字符串格式辅助，包括按“汉字 2、英文字符 1”的权重截断并添加省略号。
 
 ## 扩展原则
 

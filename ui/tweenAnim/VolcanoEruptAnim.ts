@@ -1,6 +1,5 @@
-import { _decorator, tween, Vec3, Tween, TweenEasing } from 'cc';
+import { _decorator, Node, tween, Vec3 } from 'cc';
 import { BaseAnim } from './BaseAnim';
-import { Node } from 'cc';
 const { ccclass, property } = _decorator;
 
 /** 火山喷发动画 - 震颤→膨胀→喷发→后坐 的火山节点动画 */
@@ -30,23 +29,21 @@ export class VolcanoEruptAnim extends BaseAnim {
 
     private _originScale: Vec3 = new Vec3(1, 1, 1);
     private _originPos: Vec3 = new Vec3(0, 0, 0);
+    private _hasOrigin: boolean = false;
 
-    protected onLoad(): void {
-
-    }
-
-    protected onPlay() {
+    protected onPlay(): void {
 
         this._originScale = this.node.getScale().clone();
-        // this._originPos = this.node.getPosition().clone();
+        this._originPos = this.node.getPosition().clone();
+        this._hasOrigin = true;
 
         const dur = this.duration;
         const baseS = this._originScale;
-        // const baseP = this._originPos;
+        const baseP = this._originPos;
         const bx = baseS.x, by = baseS.y, bz = baseS.z;
 
         this.node.setScale(baseS);
-        // this.node.setPosition(baseP);
+        this.node.setPosition(baseP);
 
         const t = tween(this.node);
 
@@ -61,11 +58,12 @@ export class VolcanoEruptAnim extends BaseAnim {
             const sign = (i % 2 === 0) ? 1 : -1;
 
             t.to(tremorDt * 0.4, {
-                position: new Vec3(this.node.getPosition().x + sign * amp, this.node.getPosition().y, this.node.getPosition().z),
+                position: new Vec3(baseP.x + sign * amp, baseP.y, baseP.z),
                 scale: new Vec3(bx * (1 + 0.01 * factor), by * (1 - 0.01 * factor), bz),
             }, { easing: 'sineOut' })
                 .to(tremorDt * 0.6, {
                     scale: baseS,
+                    position: baseP,
                 }, { easing: 'sineOut' });
         }
 
@@ -79,7 +77,7 @@ export class VolcanoEruptAnim extends BaseAnim {
         const burstRatio = 0.15;
         t.to(dur * burstRatio, {
             scale: new Vec3(bx / Math.sqrt(this.burstStretch), by * this.burstStretch, bz),
-            position: new Vec3(this.node.getPosition().x, this.node.getPosition().y + this.burstHeight, this.node.getPosition().z),
+            position: new Vec3(baseP.x, baseP.y + this.burstHeight, baseP.z),
         }, { easing: 'backOut' })
             .call(() => {
                 if (this.emitTarget) {
@@ -91,24 +89,37 @@ export class VolcanoEruptAnim extends BaseAnim {
         const recoilRatio = 0.30;
         t.to(dur * recoilRatio * 0.4, {
             scale: new Vec3(bx * 1.06, by * 0.85, bz),
-            position: new Vec3(this.node.getPosition().x, this.node.getPosition().y - this.burstHeight * 0.3, this.node.getPosition().z),
+            position: new Vec3(baseP.x, baseP.y - this.burstHeight * 0.3, baseP.z),
         }, { easing: 'quadIn' })
             .to(dur * recoilRatio * 0.6, {
                 scale: baseS,
-                // position: baseP,
+                position: baseP,
             }, { easing: 'elasticOut' });
 
         if (this.loop) {
             t.delay(this.loopInterval);
-            t.union().repeatForever().start();
-
+            this._tween = t.union().repeatForever();
         } else {
-            t.start();
+            this._tween = t.call(() => {
+                this.restoreOrigin();
+                this._isPlaying = false;
+                this._tween = null;
+            });
         }
+
+        this._tween.start();
     }
 
-    protected onStop() {
-        Tween.stopAllByTarget(this.node);
+    protected onStop(): void {
+        this._tween?.stop();
+        this._tween = null;
+        this.restoreOrigin();
+    }
+
+    private restoreOrigin(): void {
+        if (!this._hasOrigin) {
+            return;
+        }
         this.node.setScale(this._originScale);
         this.node.setPosition(this._originPos);
     }
