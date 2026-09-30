@@ -1,4 +1,4 @@
-import { Color, Node, Sprite, Tween, TweenEasing, Widget, tween } from 'cc';
+import { Color, Node, Sprite, Tween, TweenEasing, UIOpacity, Widget, tween } from 'cc';
 
 /** UI 动画类型枚举：3 个入口（playOne / play / playMany）共用 */
 export enum UIAnimType {
@@ -10,6 +10,8 @@ export enum UIAnimType {
     SPIN = 'spin',
     /** 颜色渐变 */
     COLOR = 'color',
+    /** 整体透明度渐变 */
+    OPACITY = 'opacity',
     /** 位移回弹：从「当前原位 + 指定像素偏移」缓动回到原位（不是移动到外部目标点） */
     MOVE_BACK = 'moveBack',
 }
@@ -28,6 +30,10 @@ export interface UIAnimOption {
     fromColor?: Color;
     /** COLOR 用：目标颜色（默认 #FFFFFF） */
     toColor?: Color;
+    /** OPACITY 用：起始透明度（默认 0） */
+    fromOpacity?: number;
+    /** OPACITY 用：目标透明度（默认 255） */
+    toOpacity?: number;
     /** 开始延迟（秒，默认 0），用于错开并行动画（如先 popIn 再 spin） */
     delay?: number;
     /** MOVE_BACK 用：起始相对原位的 X 偏移（像素，向右为正，默认 0） */
@@ -54,7 +60,7 @@ type AnimBuilder = (node: Node, anim: UIAnimOption) => Tween<any> | null;
  *   ① `UIAnimType` 加枚举；② 写一个 `_buildXxx`（返回 Tween）；③ 在 `_BUILDERS` 登记一行；④ `_channelOf` 补通道。
  * 3 个入口会自动支持，不会出现「独立方法 + switch 分支」两份重复逻辑。
  *
- * 通道隔离：scale / rotation / position / color 各占一个通道，跨通道可真正并行；
+ * 通道隔离：scale / rotation / position / color / opacity 各占一个通道，跨通道可真正并行；
  * 同通道重播会先停掉旧 tween（保证从头播而非续播）。
  *
  * 节点销毁安全：tween 目标是「代理对象 / Sprite」，引擎不会随节点销毁自动收尾；
@@ -82,6 +88,8 @@ export class UIAnimator {
     private static readonly CH_POSITION = 'position';
     /** 颜色通道名 */
     private static readonly CH_COLOR = 'color';
+    /** 透明度通道名 */
+    private static readonly CH_OPACITY = 'opacity';
     /** play() 并行根动画占用的通道：重播时停掉整条并行 tween */
     private static readonly CH_PARALLEL = 'parallel';
 
@@ -94,6 +102,7 @@ export class UIAnimator {
         [UIAnimType.POP_OUT]: (node, anim) => UIAnimator._buildPopOut(node, anim),
         [UIAnimType.SPIN]: (node, anim) => UIAnimator._buildSpin(node, anim),
         [UIAnimType.COLOR]: (node, anim) => UIAnimator._buildColor(node, anim),
+        [UIAnimType.OPACITY]: (node, anim) => UIAnimator._buildOpacity(node, anim),
         [UIAnimType.MOVE_BACK]: (node, anim) => UIAnimator._buildMoveBack(node, anim),
     };
 
@@ -323,6 +332,33 @@ export class UIAnimator {
         });
     }
 
+    /** 构建 OPACITY：通过父节点 UIOpacity 让整棵 UI 子树从透明渐变到不透明。 */
+    private static _buildOpacity(node: Node, anim: UIAnimOption): Tween<any> {
+        const duration = anim.duration ?? UIAnimator.DEFAULT_DURATION;
+        const delay = anim.delay ?? 0;
+        const fromOpacity = anim.fromOpacity ?? 0;
+        const toOpacity = anim.toOpacity ?? 255;
+        const opacity = node.getComponent(UIOpacity) ?? node.addComponent(UIOpacity);
+
+        opacity.opacity = fromOpacity;
+        const proxy = { opacity: fromOpacity };
+        let tw: Tween<any> = tween(proxy);
+        if (delay > 0) {
+            tw = tw.delay(delay);
+        }
+        return tw.to(duration, { opacity: toOpacity }, {
+            easing: anim.easing ?? UIAnimator.DEFAULT_EASING,
+            onUpdate: (state: any) => {
+                if (!UIAnimator._alive(node) || !opacity.isValid) return;
+                opacity.opacity = state.opacity;
+            },
+        }).call(() => {
+            if (node.isValid && opacity.isValid) {
+                opacity.opacity = toOpacity;
+            }
+        });
+    }
+
     /** 构建 MOVE_BACK：从「原位 + (offsetX, offsetY)」缓动回原位 */
     private static _buildMoveBack(node: Node, anim: UIAnimOption): Tween<any> {
         const duration = anim.duration ?? UIAnimator.DEFAULT_DURATION;
@@ -362,6 +398,8 @@ export class UIAnimator {
                 return UIAnimator.CH_ROTATION;
             case UIAnimType.COLOR:
                 return UIAnimator.CH_COLOR;
+            case UIAnimType.OPACITY:
+                return UIAnimator.CH_OPACITY;
             case UIAnimType.MOVE_BACK:
                 return UIAnimator.CH_POSITION;
             case UIAnimType.POP_IN:
