@@ -21,10 +21,10 @@ export class DropdownItem extends Component {
     @property({ type: Node, tooltip: '未选中状态指示节点，当前项不是选中项时自动显示' })
     unselectNode: Node | null = null;
 
-    @property({ type: Color, tooltip: '未选中时选项文字的颜色' })
+    @property({ tooltip: '未选中时选项文字的颜色' })
     public unselectColor: Color = new Color(255, 255, 255, 255);
 
-    @property({ type: Color, tooltip: '选中时选项文字的颜色' })
+    @property({ tooltip: '选中时选项文字的颜色' })
     public selectColor: Color = new Color(255, 255, 255, 255);
 
     private _index: number = -1;

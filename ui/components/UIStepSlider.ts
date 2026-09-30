@@ -1,4 +1,4 @@
-import { _decorator, EventTouch, instantiate, Label, Layout, Node, NodeEventType, ProgressBar, Slider, Touch, UITransform, Vec3, Widget } from "cc";
+import { _decorator, CCInteger, EventTouch, instantiate, Label, Layout, Node, NodeEventType, ProgressBar, Slider, Touch, UITransform, Vec3, Widget } from "cc";
 
 const { ccclass, property } = _decorator;
 
@@ -83,7 +83,7 @@ export class UIStepSlider extends Slider {
     @property({ type: Node, tooltip: '点数 label 生成的父节点：留空则默认用组件所在节点（滑条根节点）。模板节点放在哪都不影响生成位置' })
     label_split_parent: Node = null;
 
-    @property()
+    @property({ type: CCInteger })
     /** 总档位数（步进数量） */
     private stepCount: number = 0;
 
