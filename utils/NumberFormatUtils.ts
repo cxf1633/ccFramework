@@ -84,6 +84,34 @@ export class NumberFormatUtils {
         return `${this.formatDecimal(scaledAmount, decimalPlaces, options)}${unit.suffix}`;
     }
 
+    /**
+     * 以千分位逗号格式化数字（不带 K/M/B 后缀），例如 100000 -> "100,000"，7200000 -> "7,200,000"。
+     * 仅对整数部分做千分位分组，小数位原样保留。与本地环境无关，始终使用英文逗号分组。
+     *
+     * @param value 原始数字。
+     */
+    public static formatWithThousands(value: number): string {
+        const num = Number(value) || 0;
+        const negative = num < 0;
+        const abs = Math.abs(num);
+        const [intPart, decPart] = abs.toString().split(".");
+        const grouped = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        const text = decPart !== undefined ? `${grouped}.${decPart}` : grouped;
+        return negative ? `-${text}` : text;
+    }
+    /**
+     * 仅保留字符串的整数部分，去掉小数点及其后的内容。
+     * 例如 "6.00" -> "6"，"1545.00" -> "1545"，"6" -> "6"。
+     * 若传入空字符串、null 或 undefined，直接返回空字符串，避免报错。
+     *
+     * @param value 带或不带小数的字符串。
+     */
+    public static getIntegerPart(value: string | null | undefined): string {
+        if (!value) {
+            return "";
+        }
+        return value.split(".")[0] ?? "";
+    }
     private static formatDecimal(value: number, decimalPlaces: number, options: QuantityFormatOptions): string {
         const factor = Math.pow(10, decimalPlaces);
         // floor 前加 1e-6 修正浮点误差：十进制小数（如 19.9）或缩写除法（如 97000/10000）的

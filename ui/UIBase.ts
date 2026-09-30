@@ -1,4 +1,4 @@
-import { _decorator, Button, Component, Label, Node } from "cc";
+import { _decorator, Button, Component, Label, Node, screen } from "cc";
 
 const { ccclass } = _decorator;
 
@@ -201,5 +201,15 @@ export class UIBase extends Component {
         }
 
         return this.node.getChildByPath(name);
+    }
+
+    public isLongMobile(): boolean {
+        const versize = screen.windowSize;
+        const vHeight = versize.height;
+        const vWidth = versize.width;
+        if (vWidth < vHeight) {
+            return vHeight / vWidth >= 2;
+        }
+        return vWidth / vHeight >= 2;
     }
 }
