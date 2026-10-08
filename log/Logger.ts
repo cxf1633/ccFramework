@@ -53,6 +53,18 @@ export class Logger {
     }
 
     /**
+     * 使用指定颜色打印网络日志
+     * @param color 日志文本颜色
+     * @param args 日志参数
+     */
+    static netLogWithColor(color: LogColor, ...args: any[]) {
+        if (!this.debug) {
+            return;
+        }
+        this.print(args, color);
+    }
+
+    /**
      * 打印标准日志
      * @param args 日志参数
      */
