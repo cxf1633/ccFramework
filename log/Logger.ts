@@ -1,3 +1,5 @@
+import { sys } from "cc";
+
 /** 日志类型 */
 export enum LogType {
     /** 标准日志 */
@@ -125,7 +127,7 @@ export class Logger {
         });
 
         const message = textParts.join(" ");
-        const supportsCssStyle = typeof window !== "undefined" && typeof document !== "undefined";
+        const supportsCssStyle = sys.isBrowser && typeof document !== "undefined";
 
         if (supportsCssStyle) {
             backLog.call(console, `%c${message}`, color, ...objectArgs);
