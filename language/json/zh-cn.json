@@ -81,5 +81,12 @@
     "STARTUP_LOAD_TITLE": "启动失败",
     "STARTUP_LOAD_FAILED": "启动资源加载失败，请点击确定重试。",
     "SERVER_CONNECTION_FAILED": "服务器连接失败，请稍后重试。",
-    "LOGIN_FAILED_RETRY": "登录失败，请稍后重试。"
+    "LOGIN_FAILED_RETRY": "登录失败，请稍后重试。",
+    "WECHAT_LOGIN_ANDROID_ONLY": "请在安卓客户端使用微信登录",
+    "WECHAT_LOGIN_NOT_INSTALLED": "请先安装微信后再登录",
+    "WECHAT_LOGIN_TIMEOUT": "微信授权超时，请重试",
+    "WECHAT_LOGIN_LAUNCH_FAILED": "无法启动微信登录，请重试",
+    "WECHAT_LOGIN_INVALID_RESULT": "微信授权结果异常，请重试",
+    "WECHAT_LOGIN_DENIED": "微信授权被拒绝",
+    "WECHAT_LOGIN_FAILED": "微信授权失败，请重试"
 }

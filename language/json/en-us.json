@@ -81,5 +81,12 @@
     "STARTUP_LOAD_TITLE": "Startup Error",
     "STARTUP_LOAD_FAILED": "Failed to load startup resources. Tap OK to try again.",
     "SERVER_CONNECTION_FAILED": "Unable to connect to the server. Please try again later.",
-    "LOGIN_FAILED_RETRY": "Login failed. Please try again later."
+    "LOGIN_FAILED_RETRY": "Login failed. Please try again later.",
+    "WECHAT_LOGIN_ANDROID_ONLY": "WeChat login is available only in the Android app.",
+    "WECHAT_LOGIN_NOT_INSTALLED": "Install WeChat before logging in.",
+    "WECHAT_LOGIN_TIMEOUT": "WeChat authorization timed out. Please try again.",
+    "WECHAT_LOGIN_LAUNCH_FAILED": "Unable to start WeChat login. Please try again.",
+    "WECHAT_LOGIN_INVALID_RESULT": "Invalid WeChat authorization result. Please try again.",
+    "WECHAT_LOGIN_DENIED": "WeChat authorization was denied.",
+    "WECHAT_LOGIN_FAILED": "WeChat authorization failed. Please try again."
 }
