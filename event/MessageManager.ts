@@ -9,6 +9,8 @@ export type MessageHandler = (this: any, type: string, message: any) => void;
 export interface MessageProtocol {
     main?: number;
     sub?: number;
+    /** 路由名模式的服务端推送名（如 dz002_gameStart），只用于日志。 */
+    pushName?: string;
 }
 
 interface MessageListenerEntry {
@@ -93,9 +95,10 @@ export class MessageManager {
         const entries = this.listeners.get(messageType);
 
         // Logger.netLog("[事件消息]", messageType, message);
+        // 日志前缀：协议号模式打主/子协议号，路由名模式打服务端推送名，都没有就不打
         const protocolText = protocol && protocol.main != null && protocol.sub != null
             ? `${protocol.main}/${protocol.sub} `
-            : '';
+            : (protocol?.pushName ? `${protocol.pushName} ` : '');
         Logger.netLog(`[事件消息] ${protocolText}${messageType}`, ...(message == null ? [] : [JSON.stringify(message)]));
 
         if (entries && entries.length > 0) {

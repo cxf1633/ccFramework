@@ -14,6 +14,8 @@ export enum UIAnimType {
     OPACITY = 'opacity',
     /** 位移回弹：从「当前原位 + 指定像素偏移」缓动回到原位（不是移动到外部目标点） */
     MOVE_BACK = 'moveBack',
+    /** 位移：从原位缓动位移「指定像素偏移」 */
+    MOVE_AWAY = 'moveAway',
 }
 
 /** 单条动画的配置（3 个入口共用） */
@@ -36,9 +38,9 @@ export interface UIAnimOption {
     toOpacity?: number;
     /** 开始延迟（秒，默认 0），用于错开并行动画（如先 popIn 再 spin） */
     delay?: number;
-    /** MOVE_BACK 用：起始相对原位的 X 偏移（像素，向右为正，默认 0） */
+    /** MOVE_BACK / MOVE_AWAY 用：相对原位的 X 偏移（像素，向右为正，默认 0） */
     offsetX?: number;
-    /** MOVE_BACK 用：起始相对原位的 Y 偏移（像素，向上为正，默认 0） */
+    /** MOVE_BACK / MOVE_AWAY 用：相对原位的 Y 偏移（像素，向上为正，默认 0） */
     offsetY?: number;
 }
 
@@ -50,10 +52,11 @@ export interface UIAnimOption {
 type AnimBuilder = (node: Node, anim: UIAnimOption) => Tween<any> | null;
 
 /**
- * UI 动画工具。对外只暴露 3 个调用入口：
+ * UI 动画工具。对外只暴露 4 个调用入口：
  * 1. `UIAnimator.playOne(node, anim, onComplete?)`  —— 给「单个节点」播「单个动画」；
  * 2. `UIAnimator.play(node, anims, onComplete?)`    —— 给「单个节点」并行播「多个动画」；
- * 3. `UIAnimator.playMany(nodes, anim, onComplete?)`—— 给「一组节点」播「同一个动画」。
+ * 3. `UIAnimator.playMany(nodes, anim, onComplete?)`—— 给「一组节点」播「同一个动画」；
+ * 4. `UIAnimator.playOneAligned(node, anim, onComplete?)` —— 含 Widget 节点专用：挂起自动对齐 → 手动对齐 → 播动画 → 结束恢复。
  *
  * 实现约定（消除重复）：每种动画只在 `_buildXxx` 里封装一次，返回 `Tween<any>`，并登记进 `_BUILDERS`；
  * 3 个入口与「通道隔离」全部走这张表。新增一种动画只需：
@@ -104,6 +107,7 @@ export class UIAnimator {
         [UIAnimType.COLOR]: (node, anim) => UIAnimator._buildColor(node, anim),
         [UIAnimType.OPACITY]: (node, anim) => UIAnimator._buildOpacity(node, anim),
         [UIAnimType.MOVE_BACK]: (node, anim) => UIAnimator._buildMoveBack(node, anim),
+        [UIAnimType.MOVE_AWAY]: (node, anim) => UIAnimator._buildMoveAway(node, anim),
     };
 
     /** 每个节点按通道记录正在播放的 tween，仅用于「重播时停掉同通道旧动画」 */
@@ -215,6 +219,40 @@ export class UIAnimator {
         for (const node of list) {
             UIAnimator.playOne(node, anim, handleOneDone);
         }
+    }
+
+    /**
+     * 入口 4：给「传入的NODE根节点有带 Widget 的节点」播单个动画（典型：位移回弹 MOVE_BACK），修复对齐闪现问题。
+     *
+     * 闪烁根因：节点激活时 Widget.onEnable 会登记一次「延迟对齐」，它在激活帧的 lateUpdate 执行，
+     * 时序晚于 realign 与动画起点的写入 —— 会把节点闪现回目标位一帧，下一帧起缓动才接管。
+     *
+     * 处理：动画期间挂起（enabled=false）子树内所有 Widget —— onDisable 会注销未执行的延迟对齐、
+     * onEnable 不再登记；updateAlignment 是纯计算方法，挂起期间手动 realign 仍正常工作。
+     * 动画结束恢复 Widget（此时节点已在原位，重新对齐无视觉跳变）。
+     *
+     * 注意：目标节点请固定走本入口播放，避免与 playOne 混用导致挂起的 Widget 未被恢复。
+     *
+     * @param node 目标节点（调用后可再自行 setActive(true)，首帧渲染即为动画起点）
+     * @param anim 动画配置
+     * @param onComplete 动画结束回调（Widget 恢复之后调用）
+     */
+    public static playOneAligned(node: Node | null | undefined, anim: UIAnimOption, onComplete?: () => void): void {
+        if (!node || !node.isValid || !anim) {
+            onComplete?.();
+            return;
+        }
+
+        const suspendedWidgets = node.getComponentsInChildren(Widget).filter((widget) => widget.enabled);
+        suspendedWidgets.forEach((widget) => { widget.enabled = false; });
+
+        UIAnimator.realign(node);
+        UIAnimator.playOne(node, anim, () => {
+            if (node.isValid) {
+                suspendedWidgets.forEach((widget) => { widget.enabled = true; });
+            }
+            onComplete?.();
+        });
     }
 
     // ==================== 动画构建器（每种动画唯一一份，返回未 start 的 Tween） ====================
@@ -404,6 +442,35 @@ export class UIAnimator {
         });
     }
 
+    /** 构建 MOVE_AWAY：从原位缓动位移到「原位 + (offsetX, offsetY)」（与 MOVE_BACK 相反，用于退场位移） */
+    private static _buildMoveAway(node: Node, anim: UIAnimOption): Tween<any> {
+        const duration = anim.duration ?? UIAnimator.DEFAULT_DURATION;
+        const delay = anim.delay ?? 0;
+        const offsetX = anim.offsetX ?? 0;
+        const offsetY = anim.offsetY ?? 0;
+        const easing = anim.easing ?? UIAnimator.DEFAULT_EASING;
+
+        // 记录原位（含 z），动画全程只改 x/y，z 保持不变
+        const origin = node.position.clone();
+        const endX = origin.x + offsetX;
+        const endY = origin.y + offsetY;
+        const proxy = { x: origin.x, y: origin.y };
+        let tw: Tween<any> = tween(proxy);
+        if (delay > 0) {
+            tw = tw.delay(delay);
+        }
+        return tw.to(duration, { x: endX, y: endY }, {
+            easing,
+            onUpdate: (t: any) => {
+                if (!UIAnimator._alive(node)) return;
+                node.setPosition(t.x, t.y, origin.z);
+            },
+        }).call(() => {
+            if (!node.isValid) return;
+            node.setPosition(endX, endY, origin.z);
+        });
+    }
+
     // ==================== 内部工具 ====================
 
     /** 动画类型 -> 通道名（同通道互斥、跨通道可并行） */
@@ -416,6 +483,7 @@ export class UIAnimator {
             case UIAnimType.OPACITY:
                 return UIAnimator.CH_OPACITY;
             case UIAnimType.MOVE_BACK:
+            case UIAnimType.MOVE_AWAY:
                 return UIAnimator.CH_POSITION;
             case UIAnimType.POP_IN:
             case UIAnimType.POP_OUT:
