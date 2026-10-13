@@ -32,13 +32,6 @@ export class UIStepSlider extends Slider {
     img_split_parent: Node = null;
 
     /**
-     * 首尾是否也各生成一个分隔符（默认开）。
-     * 关掉就只生成中间档位的分段线（旧行为）。
-     */
-    @property({ type: Boolean, tooltip: '首尾也各生成一个分隔符（默认开，落在滑条最左/最右两个档位位置）；关掉只生成中间档位的分段线' })
-    img_split_ends: boolean = true;
-
-    /**
      * 可选的滑动进度填充节点（Node 形式，旧用法）。
      * 尺寸与锚点同样由本组件按 direction 自动处理，只是引用的是节点、内部再取 UITransform；
      * 新预制体建议直接用 img_fill_transform。
@@ -239,11 +232,8 @@ export class UIStepSlider extends Slider {
         const splitParent = this.resolveSplitParent();
         const { startX, step } = this.getStepMetrics(this.stepCount);
 
-        // 默认首尾也各来一个：0 ~ stepCount-1；关掉 img_split_ends 就只留中间档位（旧行为）
-        const first = this.img_split_ends ? 0 : 1;
-        const last = this.img_split_ends ? this.stepCount - 1 : this.stepCount - 2;
-
-        for (let i = first; i <= last; i++) {
+        // 首尾是滑条端点，只在中间档位生成分隔线
+        for (let i = 1; i < this.stepCount - 1; i++) {
             const splitNode = instantiate(this.img_split);
             splitNode.name = `${this.img_split.name}_${i}`;
             splitNode.active = true;
