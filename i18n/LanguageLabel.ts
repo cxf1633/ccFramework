@@ -104,6 +104,12 @@ export class LanguageLabel extends Component {
     public initFontSize: number = 0;
 
     public get string(): string {
+        const jsonValue = LanguageData.json[this._dataID];
+        const excelValue = LanguageData.excel?.[this._dataID]?.[LanguageData.current];
+        if (jsonValue === "" || (jsonValue == null && excelValue === "")) {
+            return "";
+        }
+
         let value = LanguageData.getLangByID(this._dataID, this._params);
         if (!value) {
             warn("[LanguageLabel] no language found, using dataID to replace");
