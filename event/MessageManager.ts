@@ -1,4 +1,4 @@
-import { Logger } from "../log/Logger";
+import { LogColor, Logger } from "../log/Logger";
 
 /**
  * Local message bus for app/game events and server push dispatch.
@@ -80,7 +80,7 @@ export class MessageManager {
     public removeAllListeners(messageType: string): void {
         if (this.listeners.has(messageType)) {
             this.listeners.delete(messageType);
-            Logger.netLog(`remove all message listeners: ${messageType}`);
+            Logger.log(`remove all message listeners: ${messageType}`);
         }
     }
 
@@ -99,7 +99,7 @@ export class MessageManager {
         const protocolText = protocol && protocol.main != null && protocol.sub != null
             ? `${protocol.main}/${protocol.sub} `
             : (protocol?.pushName ? `${protocol.pushName} ` : '');
-        Logger.netLog(`[事件消息] ${protocolText}${messageType}`, ...(message == null ? [] : [JSON.stringify(message)]));
+        Logger.netLogWithColor(LogColor.Green, `[事件消息] ${protocolText}${messageType}`, ...(message == null ? [] : [JSON.stringify(message)]));
 
         if (entries && entries.length > 0) {
             entries.slice().forEach((entry) => {

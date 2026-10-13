@@ -51,7 +51,7 @@ export class Logger {
         if (!this.debug) {
             return;
         }
-        this.print(args, LogColor.Green);
+        this.print(args, LogColor.Orange);
     }
 
     /**
