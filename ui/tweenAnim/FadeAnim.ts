@@ -25,6 +25,7 @@ export class FadeAnim extends BaseAnim {
             this.getOrAddOpacity().opacity = this.from;
         }
         super.onEnable();
+        this.node.active = false;
     }
 
     private getOrAddOpacity(): UIOpacity {
@@ -47,7 +48,7 @@ export class FadeAnim extends BaseAnim {
         this._opacity = this.getOrAddOpacity();
 
         this._opacity.opacity = reverse ? this.to : this.from;
-
+        this.node.active = true;
         this._tween = tween(this._opacity)
             .to(this.duration, { opacity: reverse ? this.from : this.to });
 
