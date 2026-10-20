@@ -25,7 +25,17 @@ export class FadeAnim extends BaseAnim {
             this.getOrAddOpacity().opacity = this.from;
         }
         super.onEnable();
-        this.node.active = false;
+    }
+
+    public override play(): void {
+        if (this._isPlaying) {
+            return;
+        }
+
+        // replay 也会经过这里；先同步起始透明度，再等待 BaseAnim 的播放延迟。
+        // 否则复用节点可能先显示上次动画结束时的 255，下一帧才跳回 from。
+        this.getOrAddOpacity().opacity = this.from;
+        super.play();
     }
 
     private getOrAddOpacity(): UIOpacity {
@@ -48,7 +58,6 @@ export class FadeAnim extends BaseAnim {
         this._opacity = this.getOrAddOpacity();
 
         this._opacity.opacity = reverse ? this.to : this.from;
-        this.node.active = true;
         this._tween = tween(this._opacity)
             .to(this.duration, { opacity: reverse ? this.from : this.to });
 
