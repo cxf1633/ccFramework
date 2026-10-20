@@ -38,6 +38,8 @@ export class AudioService {
     private musicVolume: number = 1;
     private soundVolume: number = 1;
     private musicPlayVersion: number = 0;
+    /** 当前正在播放（或正在加载）的音乐标识，用于避免同一首曲子重复重启。 */
+    private currentMusicKey: string = "";
 
     public constructor(private readonly res: ResManager) { }
 
@@ -69,6 +71,7 @@ export class AudioService {
     /** 释放播放器、缓存和 UIButton 音效桥接。 */
     public dispose(): void {
         this.musicPlayVersion++;
+        this.currentMusicKey = "";
         UIButton.setClickSoundPlayer(null);
         UIClickSound.setClickSoundPlayer(null);
         this.audioManager.dispose();
@@ -107,23 +110,20 @@ export class AudioService {
     }
 
     /** 播放指定 Bundle 内的背景音乐。 */
-    public async playMusic(bundleName: string, path: string, loop: boolean = true, volume: number = 1): Promise<void> {
-        const playVersion = ++this.musicPlayVersion;
-        const clip = await this.loadBundleAudio(bundleName, path);
-        if (playVersion !== this.musicPlayVersion) {
-            return;
-        }
+    public playMusic(bundleName: string, path: string, loop: boolean = true, volume: number = 1): Promise<void> {
+        return this.startMusic(`${bundleName}/${path}`, () => this.loadBundleAudio(bundleName, path), loop, volume);
+    }
 
-        // Logger.log(`[AudioService] 播放音乐: ${path.substring(path.lastIndexOf('/') + 1)}`);
-        const playbackVolume = this.getMusicPlaybackVolume(volume);
-        this.audioManager.setSource(MUSIC_CHANNEL, clip, { loop, volume: playbackVolume });
-        this.audioManager.play(MUSIC_CHANNEL, { loop, volume: playbackVolume, restart: true });
+    /** 播放 resources 目录下的背景音乐（大厅 BGM 等）。 */
+    public playResourceMusic(path: string, loop: boolean = true, volume: number = 1): Promise<void> {
+        return this.startMusic(`resources/${path}`, () => this.loadResourceAudio(path), loop, volume);
     }
 
     /** 停止当前背景音乐，并取消尚未完成的异步音乐播放请求。 */
     public stopMusic(): void {
         // Logger.log('[AudioService] 停止音乐');
         this.musicPlayVersion++;
+        this.currentMusicKey = "";
         this.audioManager.stop(MUSIC_CHANNEL);
     }
 
@@ -218,6 +218,38 @@ export class AudioService {
         } finally {
             this.bundleAudioLoading.delete(key);
         }
+    }
+
+    /**
+     * 背景音乐统一入口。
+     *
+     * 同一首曲子已经在播时只同步循环与音量，不从头重启 —— 从牌桌返回大厅、
+     * 大厅界面重复显示等情况都不会把音乐打断；换曲子或音乐已停止时才会重新加载播放。
+     * 加载期间又切了别的曲子（或调用了 stopMusic）时，用版本号作废这次过期请求。
+     */
+    private async startMusic(
+        musicKey: string,
+        loader: () => Promise<AudioClip>,
+        loop: boolean,
+        volume: number,
+    ): Promise<void> {
+        const playbackVolume = this.getMusicPlaybackVolume(volume);
+        if (this.currentMusicKey === musicKey && this.audioManager.isPlaying(MUSIC_CHANNEL)) {
+            this.audioManager.setLoop(MUSIC_CHANNEL, loop);
+            this.audioManager.setVolume(MUSIC_CHANNEL, playbackVolume);
+            return;
+        }
+
+        const playVersion = ++this.musicPlayVersion;
+        const clip = await loader();
+        if (playVersion !== this.musicPlayVersion) {
+            return;
+        }
+
+        // Logger.log(`[AudioService] 播放音乐: ${musicKey.substring(musicKey.lastIndexOf('/') + 1)}`);
+        this.currentMusicKey = musicKey;
+        this.audioManager.setSource(MUSIC_CHANNEL, clip, { loop, volume: playbackVolume });
+        this.audioManager.play(MUSIC_CHANNEL, { loop, volume: playbackVolume, restart: true });
     }
 
     /** 播放 UI 按钮（UIButton / UIClickSound）指定的音效，未指定时使用项目注入的默认音效。 */

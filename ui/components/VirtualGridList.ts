@@ -68,6 +68,12 @@ export class VirtualGridList extends Component {
     /** 因为节点未激活而跳过的刷新，等组件激活后补一次 */
     private _pendingRefresh: boolean = false;
 
+    /** 等着应用的跳转索引（<0 表示没有）：布局还没出来时先记着，等布局做完再滚 */
+    private _pendingScrollIndex: number = -1;
+
+    /** 最近一次 scrollToIndex 请求的索引（<0 表示没请求过）：首次 init 后就不再自动回到最前，免得把跳转覆盖掉 */
+    private _requestedScrollIndex: number = -1;
+
     // ─────────────────────────────────────────────────────────────────────────
 
     /**
@@ -115,6 +121,7 @@ export class VirtualGridList extends Component {
         this._pendingRefresh = false;
         this._forceUpdate = true;
         this.updateLayout();
+        this.applyPendingScrollToIndex();
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -193,13 +200,18 @@ export class VirtualGridList extends Component {
                     return;
                 }
                 this.refresh();
+                // 布局（content 尺寸）这时候才写好，挂起的跳转要等这里才算得准
+                this.applyPendingScrollToIndex();
             });
 
             // first init: ensure content aligns to top after all systems stabilize
+            // 调用方请求过跳转（scrollToIndex）时不回最前，否则会把跳转覆盖掉
             if (this._firstInit) {
                 this._firstInit = false;
                 this.scheduleOnce(() => {
-                    this.scrollToTop();
+                    if (this._requestedScrollIndex < 0) {
+                        this.scrollToTop();
+                    }
                 }, 0.1);
             }
         }, 0)
@@ -217,6 +229,81 @@ export class VirtualGridList extends Component {
     public stopAutoScroll()
     {
         this._scrollView?.stopAutoScroll();
+    }
+
+    /**
+     * 跳转到指定索引：让那一项**居中**显示在可视区里。
+     *
+     * 打开界面要把列表对到当前选中项时用这个，**不用调用方自己去算 ScrollView 的偏移/百分比**：
+     * 行列布局（一屏放几个、前后留白）只有列表自己知道。
+     *
+     * 时机也不用管：列表还没布局（比如刚 init，`_dataCount` 都还是 0）时先记下来，
+     * 等 init 的那次延迟布局写完 content 尺寸后再滚；索引是否越界也是在那个时候才判，所以
+     * 「先 init 再马上调本接口」这种最自然的写法是有效的。
+     *
+     * @param index 目标索引；负数或非数字时忽略
+     */
+    public scrollToIndex(index: number): void {
+        const target = Math.floor(Number(index));
+        if (!Number.isFinite(target) || target < 0) {
+            this._pendingScrollIndex = -1;
+            return;
+        }
+
+        this._requestedScrollIndex = target;
+        this._pendingScrollIndex = target;
+        this.applyPendingScrollToIndex();
+    }
+
+    /**
+     * 应用挂起的跳转。
+     *
+     * 三个前提都满足才真正滚：`ScrollView` 就绪、布局已经做过（`_startIndex >= 0`，此时 content 尺寸才是准的）、
+     * 索引在当前数据范围内；否则继续挂着，等 init 的延迟布局回调再来。
+     *
+     * 定位口径：目标格子的中心对准可视区中心，再夹到可滚范围内——
+     * 目标靠近队首/队尾时（居中所需的偏移超出可滚距离）只能贴到头，这是列表本身的边界。
+     */
+    private applyPendingScrollToIndex(): void {
+        const index = this._pendingScrollIndex;
+        if (index < 0 || !this.isScrollViewReady() || this._startIndex < 0) {
+            return;
+        }
+
+        if (index >= this._dataCount) {
+            this._pendingScrollIndex = -1;
+            return;
+        }
+
+        this._pendingScrollIndex = -1;
+        this._scrollView.stopAutoScroll();
+
+        // 沿滚动轴的第几格：纵向是第几行、横向是第几列（和 _updateCellPosition 的 mainIdx 一致）
+        const mainIndex = Math.floor(index / this._columnCount);
+
+        // 可滚距离 = content 尺寸 − 一屏尺寸；这里在布局之后才取，不会拿到延迟写入前的旧值
+        const maxOffset = this._scrollView.getMaxScrollOffset();
+        if (this._scrollView.vertical) {
+            if (maxOffset.y <= 0) {
+                // 一屏就放得下，不用滚
+                return;
+            }
+
+            const cellCenter = this._topPadding + mainIndex * this._cellHeight + this._cellHeight / 2;
+            const offset = Math.min(maxOffset.y, Math.max(0, cellCenter - this._viewSize.y / 2));
+            this._scrollView.scrollToPercentVertical(offset / maxOffset.y, 0, false);
+        } else {
+            if (maxOffset.x <= 0) {
+                return;
+            }
+
+            const cellCenter = this._sidePadding + mainIndex * this._cellWidth + this._cellWidth / 2;
+            const offset = Math.min(maxOffset.x, Math.max(0, cellCenter - this._viewSize.x / 2));
+            this._scrollView.scrollToPercentHorizontal(offset / maxOffset.x, 0, false);
+        }
+
+        // 跳过去之后立刻把新范围里的格子建出来：程序化滚动不一定走 SCROLLING 回调
+        this.refresh();
     }
 
     public updateLayout() {
