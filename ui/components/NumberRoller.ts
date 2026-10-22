@@ -8,6 +8,8 @@ export type NumberFormatter = (value: number) => string;
 export interface NumberRollOptions {
     /** 本次滚动时长；不传时使用 Inspector 配置。 */
     duration?: number;
+    /** 本次滚动倍率；默认 1，不修改组件的默认时长。 */
+    speed?: number;
     /** 本次缓动类型；不传时使用 Inspector 配置。 */
     easing?: string | EasingType;
     /** 自然播放完成后的回调；被新动画替换或主动停止时不调用。 */
@@ -97,8 +99,9 @@ export class NumberRoller extends Component {
         this.initialize();
         const normalizedValue = this.normalizeValue(value);
         const requestedDuration = options.duration ?? this.duration;
+        const speed = Number.isFinite(options.speed) && options.speed > 0 ? options.speed : 1;
         const rollDuration = Number.isFinite(requestedDuration)
-            ? Math.max(0, requestedDuration)
+            ? Math.max(0, requestedDuration) / speed
             : 0;
 
         this.stopTween();
