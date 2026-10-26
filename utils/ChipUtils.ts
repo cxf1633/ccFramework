@@ -17,33 +17,48 @@ export class ChipUtils {
     /**
      * 金额按大面值优先拆分，超过数量上限则逐步按十进制四舍五入。
      * 返回值用于近似展示，不能用于结算；原金额文字应独立显示。
-     * 金额最高按 50 亿处理，默认最多六枚。
+     * 默认使用德州扑克面额，最多六枚；金额上限默认取最大面额，可单独指定。
+     * 小于最小面额的余数不生成筹码。
      */
-    public static getApproximateChipValues(amount: number, maxCount: number = 6): number[] {
+    public static getApproximateChipValues(
+        amount: number,
+        maxCount: number = 6,
+        denominations: readonly number[] = CHIP_DENOMINATIONS,
+        maxAmount?: number,
+    ): number[] {
         if (!Number.isFinite(amount)) return [];
         if (!Number.isInteger(maxCount) || maxCount < 1) return [];
-        const normalizedAmount = Math.min(CHIP_DENOMINATIONS[0], Math.max(0, Math.round(amount)));
+        const sorted = this.normalizeDenominations(denominations);
+        if (sorted.length === 0) return [];
+        const limit = maxAmount ?? sorted[0];
+        if (!Number.isSafeInteger(limit) || limit <= 0) return [];
+        const normalizedAmount = Math.min(limit, Math.max(0, Math.round(amount)));
         if (normalizedAmount <= 0) return [];
 
-        for (let roundUnit = 1; roundUnit <= 1000000000; roundUnit *= 10) {
+        for (let roundUnit = 1; roundUnit <= limit; roundUnit *= 10) {
             const roundedAmount = Math.round(normalizedAmount / roundUnit) * roundUnit;
-            const values = this.splitChipValues(roundedAmount);
+            const values = this.splitChipValues(roundedAmount, sorted);
             if (values.length <= maxCount) return values;
         }
-        return [CHIP_DENOMINATIONS[0]];
+        return [sorted[0]];
     }
 
-    /** 按大面值优先精确拆分整数金额。 */
-    public static splitChipValues(amount: number): number[] {
+    /** 按大面值优先拆分整数金额，小于最小面额的余数忽略。 */
+    public static splitChipValues(amount: number, denominations: readonly number[] = CHIP_DENOMINATIONS): number[] {
         if (!Number.isSafeInteger(amount) || amount <= 0) return [];
         const values: number[] = [];
         let remaining = amount;
-        for (const denomination of CHIP_DENOMINATIONS) {
+        for (const denomination of this.normalizeDenominations(denominations)) {
             while (remaining >= denomination) {
                 values.push(denomination);
                 remaining -= denomination;
             }
         }
         return values;
+    }
+
+    private static normalizeDenominations(denominations: readonly number[]): number[] {
+        return denominations.filter(value => Number.isSafeInteger(value) && value > 0)
+            .sort((a, b) => b - a);
     }
 }
