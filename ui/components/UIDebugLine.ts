@@ -1,5 +1,5 @@
 import { _decorator, Color, Component, Graphics, Node, UITransform, Vec2, Vec3 } from "cc";
-import { DEBUG, EDITOR } from "cc/env";
+import { EDITOR } from "cc/env";
 
 const { ccclass, property, requireComponent, disallowMultiple, executeInEditMode, menu } = _decorator;
 
@@ -25,7 +25,7 @@ export class UIDebugLine extends Component {
     @property({ min: 0, tooltip: "线宽，0 表示不绘制" })
     lineWidth: number = 2;
 
-    @property({ tooltip: "是否在编辑器中显示调试线" })
+    @property({ tooltip: "仅控制编辑器场景中的调试线，不影响运行时" })
     previewInEditor: boolean = true;
 
     private graphics: Graphics | null = null;
@@ -38,8 +38,8 @@ export class UIDebugLine extends Component {
     }
 
     protected lateUpdate(): void {
-        // 发布构建不采集点位；编辑器和调试运行时自动跟随配置及节点移动。
-        if (EDITOR || DEBUG) {
+        // 仅在编辑器中跟随配置及定位节点变化，运行时不采集或绘制点位。
+        if (EDITOR) {
             this.refresh(false);
         }
     }
@@ -58,7 +58,7 @@ export class UIDebugLine extends Component {
         const graphics = this.graphics || (this.graphics = this.getComponent(Graphics));
         if (!graphics) return;
 
-        if (!this.enabledInHierarchy || !(EDITOR ? this.previewInEditor : DEBUG)) {
+        if (!EDITOR || !this.enabledInHierarchy || !this.previewInEditor) {
             graphics.clear();
             this.signature = "";
             return;
