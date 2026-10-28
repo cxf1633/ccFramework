@@ -146,7 +146,28 @@ export class UIBase extends Component {
         }
     }
 
-    /** 为指定按钮注册点击处理函数，并替换已有绑定。 */
+    /**
+     * 手动绑定按钮点击。普通静态按钮优先使用「节点名与方法名相同」的自动绑定，
+     * 不需要在 onInit 中再调用本方法。
+     *
+     * 自动绑定只在 __preload 时扫描当前 UIBase 负责的节点树，遇到其他 UIBase
+     * 子组件会跳过其整棵子树。以下情况才需要显式注册：
+     * - 扫描完成后动态创建或加载的按钮，例如列表条目、动态挂载的预制体。
+     * - 由本组件管理、但实际位于本组件节点树之外的按钮。
+     * - 节点没有同名方法，需要共用处理函数、传入外部回调或通过闭包捕获条目数据。
+     * 不应借此重复接管已经由其他 UIBase 管理的按钮。
+     *
+     * 会先解除「当前 UIBase」在该节点上的旧绑定，因此无需提前调用
+     * unregisterButtonClick；同时清空 Button.clickEvents 中的编辑器事件配置。
+     * 不会清除其他组件通过 node.on 注册的监听，不能用来替代跨组件的解绑。
+     * 新监听以当前 UIBase 为 this，组件销毁时统一解除；隐藏时不会自动解除。
+     * 回调接收点击事件；缺少 event.target 时会补充 target 为按钮节点。
+     *
+     * @param target 按钮节点，或相对于 this.node 的路径。字符串通过
+     * getChildByPath 查找，不使用 getNode 的名称索引；深层按钮应传完整路径或 Node。
+     * @param handler 点击回调，可使用闭包传入条目下标、ID 等业务数据。
+     * @returns 绑定成功返回 Button；节点或 Button 缺失时警告并返回 null。
+     */
     protected registerButtonClick(
         target: string | Node,
         handler: ButtonHandler,
