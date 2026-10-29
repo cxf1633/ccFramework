@@ -40,7 +40,7 @@ export class LanguageSpine extends Component {
     private updateSpine(): void {
         const skeletonData = this.getSkeletonData();
         if (!skeletonData) {
-            console.error(`[LanguageSpine] Resource not found: ${LanguageData.getBusinessBundleName(LanguageData.current)}/spine/${this.dataID}`);
+            console.error(`[LanguageSpine] Resource not found: spine/${LanguageData.current}/${this.dataID}`);
             return;
         }
 
@@ -56,10 +56,12 @@ export class LanguageSpine extends Component {
     }
 
     private getSkeletonData(): sp.SkeletonData | null {
-        const businessBundle = assetManager.getBundle(LanguageData.getBusinessBundleName(LanguageData.current));
-        const businessSkeletonData = businessBundle?.get(`spine/${this.dataID}`, sp.SkeletonData);
-        if (businessSkeletonData) {
-            return businessSkeletonData;
+        for (const source of LanguageData.businessSources) {
+            const businessBundle = assetManager.getBundle(source.bundleName);
+            const businessSkeletonData = businessBundle?.get(`${source.path}/${this.getBundlePath()}`, sp.SkeletonData);
+            if (businessSkeletonData) {
+                return businessSkeletonData;
+            }
         }
 
         const languageBundle = assetManager.getBundle(LanguageData.bundleName);

@@ -171,9 +171,10 @@ Prefab 加载由 `ResManager` 负责缓存和资源级并发合并。普通 UI �
 核心规则：
 
 - 语言 Bundle 名为 `language`。
-- 业务语言按语种拆分为 `language-<lang>` Bundle，JSON 路径为 `assets/languages/<lang>/<lang>.json`，图片路径为 `assets/languages/<lang>/texture`。
+- 应用在启动前配置 `LanguageData.businessSources`，每项包含所属 `bundleName` 和目录 `path`；目录内 JSON 路径为 `json/<lang>`，图片路径为 `texture/<lang>`，Spine 路径为 `spine/<lang>`，无需将语言目录设为独立 Bundle。
 - 框架语言 JSON 路径：`assets/framework/language/json/<lang>`。
 - 加载顺序是业务 JSON 先加载，框架 JSON 后加载；同名 key 会被后加载的框架 JSON 覆盖。
+- 切换语言只释放旧语言目录内的资源，保留所属游戏 Bundle 及预制体默认引用的中文资源。
 - 支持短码归一化：`zh -> zh-cn`，`en -> en-us`。
 - 请求不存在或不支持的语言时，会回落到默认语言 `en-us`。
 

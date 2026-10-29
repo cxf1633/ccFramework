@@ -111,12 +111,7 @@ export class LanguageManager extends Singleton {
     }
 
     private async loadLanguageAssets(language: string): Promise<boolean> {
-        // 项目 Prefab 默认引用中文多语言资源。冷启动直接选择英文时，也必须先加载
-        // 中文 Bundle 的资源索引，否则场景反序列化会报 “Please load bundle language-zh-cn first”。
-        if (language !== LanguageDefine.zhcn) {
-            await this._languagePack.ensureBusinessBundle(LanguageDefine.zhcn);
-        }
-
+        // 语言目录随所属游戏 Bundle 加载，同时具备默认中文资源的索引。
         const loaded = await this.loadJson(language);
         if (!loaded) {
             return false;
@@ -131,7 +126,7 @@ export class LanguageManager extends Singleton {
         const oldLanguage = LanguageData.current;
         LanguageData.current = language;
         this._languagePack.updateLanguage();
-        // Prefab 默认序列化引用中文图片；中文资源必须常驻，避免缓存 Prefab 再次激活时引用已释放的 SpriteFrame。
+        // Prefab 默认序列化引用中文图片；保留中文资源，避免缓存 Prefab 再次激活时引用失效。
         if (oldLanguage !== LanguageDefine.zhcn) {
             this._languagePack.releaseLanguageAssets(oldLanguage);
         }

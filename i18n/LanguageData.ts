@@ -1,17 +1,20 @@
 import { TTFFont } from "cc";
 
+export interface LanguageSource {
+    bundleName: string;
+    /** 相对于所属 Bundle 的语言目录。 */
+    path: string;
+}
+
 export class LanguageData {
     public static readonly bundleName: string = "language";
-    public static readonly businessBundlePrefix: string = "language-";
+    /** 应用配置的语言目录，包含 json、texture 和可选的 spine。 */
+    public static businessSources: readonly LanguageSource[] = [];
 
     public static current: string = "";
     public static json: Record<string, string> = {};
     public static excel: any = null;
     public static font: TTFFont | null = null;
-
-    public static getBusinessBundleName(language: string): string {
-        return `${this.businessBundlePrefix}${language.toLowerCase()}`;
-    }
 
     public static getLangByID(labId: string, params: Array<{ key: string, value: string }> = []): string {
         let text = this.json[labId];
