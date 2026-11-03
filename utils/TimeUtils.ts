@@ -93,6 +93,18 @@ export class TimeUtils {
         return Math.abs(endDay - startDay) / 86_400_000;
     }
 
+    /**
+     * 今天 23:59:59.999 的时间戳（本地时区）。
+     *
+     * 用于「当天有效」这类按自然日过期的判定。
+     * @param now 基准时间，缺省为当前时间。
+     */
+    public static getTodayEndTime(now: number = Date.now()): number {
+        const date = new Date(now);
+        date.setHours(23, 59, 59, 999);
+        return date.getTime();
+    }
+
     /** 两位补零，ES2015 兼容（不使用 String.padStart）。 */
     private static pad2(value: number): string {
         return value < 10 ? `0${value}` : String(value);

@@ -32,6 +32,16 @@ export class UIStepSlider extends Slider {
     img_split_parent: Node = null;
 
     /**
+     * 首尾是否也各生成一个分隔符（默认关）。
+     *
+     * 关着（默认）：只在中间档位生成分段线，一共 stepCount - 2 条 —— 滑条最左/最右两个档位就是滑条端点，
+     * 手柄在进度 0 / 1 时正好压在那儿，端点刻度基本看不见。
+     * 打开：首尾也各来一条，一共 stepCount 条，刻度覆盖到滑条两端。
+     */
+    @property({ type: Boolean, tooltip: '首尾也各生成一个分隔符（默认关）：关掉只在中间档位生成分段线；打开后滑条最左/最右两个档位位置也各有一条刻度' })
+    img_split_ends: boolean = false;
+
+    /**
      * 可选的滑动进度填充节点（Node 形式，旧用法）。
      * 尺寸与锚点同样由本组件按 direction 自动处理，只是引用的是节点、内部再取 UITransform；
      * 新预制体建议直接用 img_fill_transform。
@@ -232,8 +242,12 @@ export class UIStepSlider extends Slider {
         const splitParent = this.resolveSplitParent();
         const { startX, step } = this.getStepMetrics(this.stepCount);
 
-        // 首尾是滑条端点，只在中间档位生成分隔线
-        for (let i = 1; i < this.stepCount - 1; i++) {
+        // 默认只在中间档位生成分隔线（首尾是滑条端点、会被手柄压住，需要时用 img_split_ends 打开）：
+        // 关着 → 1 ~ stepCount-2；打开 → 0 ~ stepCount-1，首尾各多一条
+        const first = this.img_split_ends ? 0 : 1;
+        const last = this.img_split_ends ? this.stepCount - 1 : this.stepCount - 2;
+
+        for (let i = first; i <= last; i++) {
             const splitNode = instantiate(this.img_split);
             splitNode.name = `${this.img_split.name}_${i}`;
             splitNode.active = true;
