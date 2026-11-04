@@ -46,7 +46,9 @@ export class UIDragSource extends Component {
     public dragKey = '';
 
     @property({ tooltip: '拖动时创建新实例；关闭时拖动当前节点，开启时优先使用 Drag Prefab，其次使用图片' })
-    public createInstance = false;
+    public InstanceOnDrop = false;
+    @property({ tooltip: '仅用于副本：命中后销毁副本；关闭由业务接管。未命中和取消始终销毁副本' })
+    public destroyOnDrop = true;
 
     @property({ type: Prefab, tooltip: '开启 Create Instance 时优先生成此 UI 预制体；留空使用图片副本' })
     public dragPrefab: Prefab | null = null;
@@ -69,8 +71,7 @@ export class UIDragSource extends Component {
     @property({ tooltip: '相对手指的 UI 偏移；自身拖动同时保留抓取偏移' })
     public pointerOffset = new Vec2();
 
-    @property({ tooltip: '仅用于副本：命中后销毁副本；关闭由业务接管。未命中和取消始终销毁副本' })
-    public destroyOnDrop = true;
+
 
     private touchId: number | null = null;
     private readonly startPoint = new Vec2();
@@ -168,7 +169,7 @@ export class UIDragSource extends Component {
     private createDrag(event: EventTouch): void {
         const touchId = this.touchId;
         if (touchId === null) return;
-        const self = !this.createInstance;
+        const self = !this.InstanceOnDrop;
         const frame = this.dragSpriteFrame ?? this.getComponent(Sprite)?.spriteFrame ?? null;
         const parent = self ? this.node.parent : this.dragParent ?? this.findCanvasNode();
         if (!parent || !isValid(parent, true) || !parent.activeInHierarchy || !parent.getComponent(UITransform)
