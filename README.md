@@ -106,6 +106,7 @@ Inspector 中显式绑定 `ui/materials/gradient/gradient.mtl`；`PeekCardContro
 - `CaptchaView`：本地字符验证码绘制，也可展示服务端下发的 PNG Base64 图片；服务端模式通过 `setCode()`、`setServerImage()` 和 `setOnRequestNewCode()` 接入。
 - `DropDown/Dropdown`：动态选项下拉框，支持运行时增删选项、共享 List、边界翻转、选中状态和变更回调。
 - `FollowTarget`：按配置跟随目标节点的位置、旋转和缩放。
+- `UIDragSource` / `UIDropTarget`：组合式拖放来源与接收区域，统一输入、命中检测和进入、离开、放下、结束、取消通知。配置见下文。
 - `ProgressTimer`：圆形/半圆填充计时器，支持文字、颜色过渡和沿圆环移动的圆点。
 - `SliderBar`：同步 `Slider`、`ProgressBar`、填充 Sprite 与数值文本，可动画设置进度。
 - `UIStepSlider`：离散档位滑条，支持刻度、档位文本、填充尺寸同步和 `step-changed` 事件。
@@ -114,6 +115,64 @@ Inspector 中显式绑定 `ui/materials/gradient/gradient.mtl`；`PeekCardContro
 - `ToggleVisibility`：根据原生 `Toggle` 状态切换两组节点的显隐。
 - `UIClickSound`：为原生 `Button` / `Toggle` 接入框架点击音效和防连点；不要与 `UIButton` 挂在同一节点。
 - `tagSystem/TagNode` / `TagGroup`：按字符串域和标签控制指定子树内节点显隐，多套标签系统互不干扰。
+
+#### UIDragSource 与 UIDropTarget
+
+物品业务、可拖动能力和接收能力分别挂组件，无需让业务类继承拖动基类。
+
+1. 来源挂 `UIDragSource`，要求自身有 `UITransform`。`Create Instance` 默认关闭，拖动自身并保持抓取偏移；开启后优先使用 `Drag Prefab` 生成副本，否则使用 `Drag Sprite Frame` 生成图片副本。图片留空时读取当前节点 `Sprite.spriteFrame`，缺少可用资源时取消拖动。生成副本时来源保持原位，预制体副本根节点需要 `UITransform`。图片副本自动使用来源 Layer 和图片自然尺寸。
+2. 副本的 `Drag Parent` 建议使用 Canvas 下无 Layout / Mask 的顶层空节点，留空使用最近的 Canvas。自身拖动保留原父节点，避免 Layout / Widget 自动改写位置。组件适用于常规 2D Canvas UI。
+3. 接收区域挂 `UIDropTarget`。`Hit Area` 留空使用自身固定 UITransform 范围，不受子节点换图片影响。
+4. 来源的 `Drag Key` 对应目标的 `Accepted Keys`；目标空数组允许所有分类。业务还可设置 `target.accepts(context)` 校验，例如只接收当前刀或有图片的食材。
+5. 来源的 `Drop Targets` 绑定具体目标组件时按数组顺序检测；留空使用当前场景登记的活动目标，按 Priority 从大到小检测，同优先级按登记顺序。`Target Root` 可以限定目标所属子树。
+
+现有配置：刀的 Drag Key 为 `knife`，砧板接收 `knife`；CuttingFood 的 Drag Key 为 `cutting-food`，碗接收 `cutting-food`。一个目标同时只由一个拖动来源占用。
+
+`SackItem` 的数字属性 `itemId` 默认为101。在 UIBase 的 `onShow` 中通过 `Framework.ResourcesMgr` 加载 game Bundle 的 `foods/bag_<itemId>/spriteFrame` 与 `foods/food_raw_<itemId>/spriteFrame`，分别赋给袋子显示和来源的 `dragSpriteFrame`，Drag Key 为 `raw-food`。加载完成前及隐藏期间禁用拖动，过期的异步结果不再应用。修改编号后再次显示或调用 `present()` 可以刷新。
+
+来源节点通知（`UIDragSource.EventType`）：
+
+节点事件负责起拖，手势期间只暂停实际起触节点的系统事件，后续移动、松手和取消由 `input` 接收并依据 `event.type` 判断，结束时恢复节点并移除监听。业务使用下列统一通知，不依赖节点的 TOUCH_CANCEL 来推断是否真正取消。
+
+- `DRAG_START`：超过起拖阈值并成功创建拖动物体后触发，轻点不触发。
+- `DRAG_MOVE`：移动后触发，带当前命中目标或 null。
+- `TARGET_ENTER / TARGET_LEAVE`：目标变化时触发。
+- `DRAG_CANCEL`：触摸真正取消、组件禁用或进入后台等中断时触发。
+- `DRAG_END`：每次已开始的拖动结束时触发一次，包含 cancelled、dropped。正常松手和取消均触发。
+- `SOURCE_RESTORED`：自身复位后触发，参数为来源组件。
+
+接收节点通知（`UIDropTarget.EventType`）：`ENTER / OVER / LEAVE / DROP`，参数均为 `UIDropContext`。正常命中松手顺序为 DROP → LEAVE → DRAG_END；取消只离开目标并复位，不触发 DROP。
+
+业务监听写法（代码放在业务组件内部，导入路径按目录调整）：
+
+```ts
+import { UIDropTarget } from '../../framework/ui/components/UIDropTarget';
+import type { UIDropContext } from '../../framework/ui/components/UIDragTypes';
+
+protected onEnable(): void {
+    this.node.on(UIDropTarget.EventType.ENTER, this.onDragEnter, this);
+    this.node.on(UIDropTarget.EventType.LEAVE, this.onDragLeave, this);
+}
+
+protected onDisable(): void {
+    this.node.off(UIDropTarget.EventType.ENTER, this.onDragEnter, this);
+    this.node.off(UIDropTarget.EventType.LEAVE, this.onDragLeave, this);
+}
+
+private onDragEnter(context: UIDropContext): void {
+    // 读取 context.sourceNode 上的业务组件，显示预览。
+}
+
+private onDragLeave(context: UIDropContext): void {
+    // 清除预览。
+}
+```
+
+上下文统一定义在 `UIDragTypes.ts`，包含 source、sourceNode、dragNode、target、targetNode、screenPosition、uiPosition、touchId、windowId 和 restoreSource。目标事件的 target/targetNode 非空；来源移动和结束事件可以为空。命中检测使用屏幕坐标，显示跟随使用 UI 坐标。
+
+目标也提供 Inspector `Drop Events`，配置方式与 Button 相同，第一个参数为 UIDropContext，非空的 CustomEventData 为第二个参数。项目中的碗和砧板已使用代码监听，避免为同一行为再重复配置 Inspector 回调。
+
+自身未命中、取消或回调异常时自动复位；命中后由业务接管，可在动画结束后调用 `context.restoreSource()`。副本默认在命中回调返回后销毁，关闭 Destroy On Drop 后由业务负责接管和销毁；副本未命中或取消始终销毁。回调均同步执行，默认销毁模式下不要在 await 之后继续操作副本。
 
 `ui/components/UIRadarChart.ts` 依赖同节点的 `Graphics`，按传入的归一化数值绘制雷达图的
 多边形数据区域。轴的数量和顶点位置由 `axisNodes` 决定：节点数量即多边形边数，每个节点的位置
