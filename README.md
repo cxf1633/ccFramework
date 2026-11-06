@@ -120,6 +120,12 @@ Inspector 中显式绑定 `ui/materials/gradient/gradient.mtl`；`PeekCardContro
 
 物品业务、可拖动能力和接收能力分别挂组件，无需让业务类继承拖动基类。
 
+悬停展示可组合 `UIDropPreview`，不需要业务重复保存 Sprite 状态。在目标节点挂组件，将 `Preview Sprite` 绑定到用于显示预览的现有 Sprite，`Preview Alpha` 默认128。组件只负责展示，不负责范围、图片加载或接收规则。
+
+- 在业务的 ENTER/OVER 回调选择图片后调用 `preview.show(context.source, frame)`；同一来源的连续刷新不会覆盖首次保存的原图，不同的活动来源不会抢占预览。
+- LEAVE、取消或业务收尾调用 `preview.clear(context.source)`，恢复原图片、颜色、显隐和 UITransform 尺寸；组件停用或销毁时自动清理。
+- DROP 中先 `clear` 再写入正式内容，避免旧预览状态覆盖新食材。选择哪张图片、是否暂停其他拖动及异步装碗仍由业务组件负责。
+
 1. 来源挂 `UIDragSource`，要求自身有 `UITransform`。`Create Instance` 默认关闭，拖动自身并保持抓取偏移；开启后优先使用 `Drag Prefab` 生成副本，否则使用 `Drag Sprite Frame` 生成图片副本。图片留空时读取当前节点 `Sprite.spriteFrame`，缺少可用资源时取消拖动。生成副本时来源保持原位，预制体副本根节点需要 `UITransform`。图片副本自动使用来源 Layer 和图片自然尺寸。
 2. 副本的 `Drag Parent` 建议使用 Canvas 下无 Layout / Mask 的顶层空节点，留空使用最近的 Canvas。自身拖动保留原父节点，避免 Layout / Widget 自动改写位置。组件适用于常规 2D Canvas UI。
 3. 接收区域挂 `UIDropTarget`。`Hit Area` 留空使用自身固定 UITransform 范围，不受子节点换图片影响。
