@@ -33,12 +33,19 @@ interface DragSession {
 @menu('UI/UIDragSource')
 export class UIDragSource extends Component {
     public static readonly EventType = {
+        /** 达到起拖条件并成功创建拖动物体后触发；未起拖的轻点不触发。 */
         DRAG_START: 'ui-drag-source-start',
+        /** 拖动位置和当前目标检测更新后触发，参数为 UIDragContext。 */
         DRAG_MOVE: 'ui-drag-source-move',
+        /** 进入可接收的目标区域时触发，上下文中包含当前目标。 */
         TARGET_ENTER: 'ui-drag-source-target-enter',
+        /** 离开、切换目标或结束当前目标交互时触发。 */
         TARGET_LEAVE: 'ui-drag-source-target-leave',
+        /** 已开始的拖动结束时触发，包括取消；参数包含 cancelled 和 dropped。 */
         DRAG_END: 'ui-drag-source-end',
+        /** 已开始的拖动被取消或中断时触发，随后仍会触发 DRAG_END。 */
         DRAG_CANCEL: 'ui-drag-source-cancel',
+        /** 自身拖动复位后触发，参数为当前 UIDragSource；销毁副本不触发。 */
         SOURCE_RESTORED: 'ui-drag-source-restored',
     } as const;
 
