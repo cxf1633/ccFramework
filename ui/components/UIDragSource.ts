@@ -49,9 +49,6 @@ export class UIDragSource extends Component {
         SOURCE_RESTORED: 'ui-drag-source-restored',
     } as const;
 
-    @property({ tooltip: '拖动分类，供 Accepted Keys 过滤；例如 knife、cutting-food' })
-    public dragKey = '';
-
     @property({ tooltip: '拖动时创建新实例；关闭时拖动当前节点，开启时优先使用 Drag Prefab，其次使用图片' })
     public InstanceOnDrop = false;
     @property({ tooltip: '仅用于副本：命中后销毁副本；关闭由业务接管。未命中和取消始终销毁副本' })

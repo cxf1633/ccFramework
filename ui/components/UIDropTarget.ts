@@ -1,4 +1,4 @@
-import { _decorator, CCString, Component, EventHandler, isValid, Node, UITransform, Vec2 } from 'cc';
+import { _decorator, Component, EventHandler, isValid, Node, UITransform, Vec2 } from 'cc';
 import type { UIDragContext, UIDropContext } from './UIDragTypes';
 
 const { ccclass, property, requireComponent, disallowMultiple, menu } = _decorator;
@@ -21,8 +21,8 @@ export class UIDropTarget extends Component {
     @property({ type: Node, tooltip: '检测范围；留空使用自身 UITransform，不合并子节点范围' })
     public hitArea: Node | null = null;
 
-    @property({ type: [CCString], tooltip: '可接收的 Drag Key；空数组接收所有类型' })
-    public acceptedKeys: string[] = [];
+    @property({ type: [Node], tooltip: '允许接收的来源节点；空列表仅使用业务接收条件' })
+    public acceptedSources: Node[] = [];
 
     @property({ tooltip: '自动发现目标时，优先级越大越先检测；同优先级按注册顺序' })
     public priority = 0;
@@ -60,7 +60,7 @@ export class UIDropTarget extends Component {
 
     public canAccept(context: UIDragContext): boolean {
         if (!isValid(this, true) || !this.enabledInHierarchy) return false;
-        if (this.acceptedKeys.length && this.acceptedKeys.indexOf(context.source.dragKey) < 0) return false;
+        if (this.acceptedSources.length && this.acceptedSources.indexOf(context.sourceNode) < 0) return false;
         // 一个目标同时只由一个来源占用，避免多指预览相互覆盖。
         if (this.hoverContext && this.hoverContext.source !== context.source) return false;
         return this.accepts?.({ ...context, target: this, targetNode: this.node }) ?? true;

@@ -125,12 +125,12 @@ Inspector 中显式绑定 `ui/materials/gradient/gradient.mtl`；`PeekCardContro
 1. 来源挂 `UIDragSource`，要求自身有 `UITransform`。`Create Instance` 默认关闭，拖动自身并保持抓取偏移；开启后优先使用 `Drag Prefab` 生成副本，否则使用 `Drag Sprite Frame` 生成图片副本。图片留空时读取当前节点 `Sprite.spriteFrame`，缺少可用资源时取消拖动。生成副本时来源保持原位，预制体副本根节点需要 `UITransform`。图片副本自动使用来源 Layer 和图片自然尺寸。
 2. 副本的 `Drag Parent` 建议使用 Canvas 下无 Layout / Mask 的顶层空节点，留空使用最近的 Canvas。自身拖动保留原父节点，避免 Layout / Widget 自动改写位置。组件适用于常规 2D Canvas UI。
 3. 接收区域挂 `UIDropTarget`。`Hit Area` 留空使用自身固定 UITransform 范围，不受子节点换图片影响。
-4. 来源的 `Drag Key` 对应目标的 `Accepted Keys`；目标空数组允许所有分类。业务还可设置 `target.accepts(context)` 校验，例如只接收当前刀或有图片的食材。
+4. 目标的 `Accepted Sources` 可拖入允许接收的来源节点；空列表不限制来源节点。业务还可设置 `target.accepts(context)` 校验，例如只接收当前刀或有图片的食材。
 5. 来源的 `Drop Targets` 绑定具体目标组件时按数组顺序检测；留空使用当前场景登记的活动目标，按 Priority 从大到小检测，同优先级按登记顺序。`Target Root` 可以限定目标所属子树。
 
-现有配置：刀的 Drag Key 为 `knife`，砧板接收 `knife`；CuttingFood 的 Drag Key 为 `cutting-food`，碗接收 `cutting-food`。一个目标同时只由一个拖动来源占用。
+接收条件使用来源节点引用或业务组件判断，不依赖字符串分类。一个目标同时只由一个拖动来源占用。
 
-`SackItem` 的数字属性 `itemId` 默认为101。在 UIBase 的 `onShow` 中通过 `Framework.ResourcesMgr` 加载 game Bundle 的 `foods/bag_<itemId>/spriteFrame` 与 `foods/food_raw_<itemId>/spriteFrame`，分别赋给袋子显示和来源的 `dragSpriteFrame`，Drag Key 为 `raw-food`。加载完成前及隐藏期间禁用拖动，过期的异步结果不再应用。修改编号后再次显示或调用 `present()` 可以刷新。
+`SackItem` 的 `itemId` 表示食材编号；袋子图片和来源的 `dragSpriteFrame` 在预制体中配置。砧板通过业务组件中的食物袋节点列表限定来源，接收时同步食材编号。
 
 来源节点通知（`UIDragSource.EventType`）：
 
