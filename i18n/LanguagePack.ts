@@ -1,4 +1,5 @@
 import { Asset, AssetManager, assetManager, director, JsonAsset, warn } from "cc";
+import { Logger } from "../log/Logger";
 import { LanguageData } from "./LanguageData";
 import { LanguageLabel } from "./LanguageLabel";
 import { LanguageSpine } from "./LanguageSpine";
@@ -44,18 +45,32 @@ export class LanguagePack {
     public async loadJson(lang: string): Promise<boolean> {
         const language = lang.toLowerCase();
         const nextJson: Record<string, string> = {};
+        const keySources = new Map<string, string>();
+        const mergeJson = (json: Record<string, string>, source: string): void => {
+            Object.keys(json).forEach((key) => {
+                if (Object.prototype.hasOwnProperty.call(nextJson, key)) {
+                    Logger.warn(
+                        `[LanguagePack] duplicate language key "${key}" (${language}): ` +
+                        `${keySources.get(key)} -> ${source}`,
+                        { previous: nextJson[key], incoming: json[key] },
+                    );
+                }
+                keySources.set(key, source);
+            });
+            Object.assign(nextJson, json);
+        };
         let loaded = false;
         for (const source of LanguageData.businessSources) {
             const projectJson = await this.loadBundleJson(`${source.path}/json/${language}`, source.bundleName);
             if (projectJson) {
-                Object.assign(nextJson, projectJson);
+                mergeJson(projectJson, `${source.bundleName}/${source.path}/json/${language}`);
                 loaded = true;
             }
         }
 
         const frameworkJson = await this.loadBundleJson(`json/${language}`);
         if (frameworkJson) {
-            Object.assign(nextJson, frameworkJson);
+            mergeJson(frameworkJson, `${LanguageData.bundleName}/json/${language}`);
             loaded = true;
         }
 
@@ -85,13 +100,19 @@ export class LanguagePack {
 
     private async loadBundleJson(path: string, bundleName: string = LanguageData.bundleName): Promise<Record<string, string> | null> {
         const bundle = await this.ensureBundle(bundleName);
-        if (!bundle || !bundle.getInfoWithPath(path, JsonAsset)) {
+        if (!bundle) {
+            Logger.warn(`[LanguagePack] language bundle unavailable: ${bundleName}/${path}`);
+            return null;
+        }
+        if (!bundle.getInfoWithPath(path, JsonAsset)) {
+            Logger.warn(`[LanguagePack] language json not found: ${bundleName}/${path}`);
             return null;
         }
 
         return new Promise((resolve) => {
             bundle.load(path, JsonAsset, (err, asset) => {
                 if (err || !asset) {
+                    Logger.warn(`[LanguagePack] language json load failed: ${bundleName}/${path}`, err);
                     resolve(null);
                     return;
                 }
