@@ -86,6 +86,9 @@ export class UIDragSource extends Component {
     private session: DragSession | null = null;
     private pausedTouchNode: Node | null = null;
 
+    /** 可选起拖条件；未设置时默认允许。业务组件停用时应清除自身回调。 */
+    public canStartDrag: (() => boolean) | null = null;
+
     public get isDragging(): boolean { return !!this.session?.started; }
 
     protected onEnable(): void {
@@ -125,7 +128,7 @@ export class UIDragSource extends Component {
     }
 
     private onTouchStart(event: EventTouch): void {
-        if (!this.enabledInHierarchy || this.touchId !== null) return;
+        if (!this.enabledInHierarchy || this.touchId !== null || this.canStartDrag?.() === false) return;
         const touchId = event.getID();
         if (touchId === null) return;
         this.touchId = touchId;
@@ -176,6 +179,8 @@ export class UIDragSource extends Component {
     private createDrag(event: EventTouch): void {
         const touchId = this.touchId;
         if (touchId === null) return;
+        // 按下到越过起拖阈值之间，业务状态也可能发生变化。
+        if (this.canStartDrag?.() === false) { this.cancelDrag(); return; }
         const self = !this.InstanceOnDrop;
         const frame = this.dragSpriteFrame ?? this.getComponent(Sprite)?.spriteFrame ?? null;
         const parent = self ? this.node.parent : this.dragParent ?? this.findCanvasNode();
