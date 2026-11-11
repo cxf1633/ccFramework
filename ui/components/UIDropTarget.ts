@@ -1,4 +1,4 @@
-import { _decorator, Component, EventHandler, isValid, Node, UITransform, Vec2 } from 'cc';
+import { _decorator, Color, Component, EventHandler, isValid, Node, Sprite, UITransform, Vec2 } from 'cc';
 import type { UIDragContext, UIDropContext } from './UIDragTypes';
 
 const { ccclass, property, requireComponent, disallowMultiple, menu } = _decorator;
@@ -33,6 +33,10 @@ export class UIDropTarget extends Component {
     /** 可选业务接收条件；禁用/销毁时应按原引用清除。 */
     public accepts: ((context: UIDragContext) => boolean) | null = null;
 
+    private previewNode: Node | null = null;
+
+    public get isPreviewing(): boolean { return !!this.previewNode; }
+
     private hoverContext: UIDropContext | null = null;
 
     public static getActiveTargets(): UIDropTarget[] {
@@ -43,6 +47,7 @@ export class UIDropTarget extends Component {
 
     protected onDisable(): void {
         UIDropTarget.targets.delete(this);
+        this.clearPreview();
         const context = this.hoverContext;
         if (context) {
             context.source.clearTarget(this);
@@ -50,7 +55,7 @@ export class UIDropTarget extends Component {
         }
     }
 
-    protected onDestroy(): void { UIDropTarget.targets.delete(this); }
+    protected onDestroy(): void { this.clearPreview(); UIDropTarget.targets.delete(this); }
 
     public containsPoint(screenPoint: Vec2, windowId = 0): boolean {
         const area = this.hitArea ?? this.node;
@@ -66,26 +71,61 @@ export class UIDropTarget extends Component {
         return this.accepts?.({ ...context, target: this, targetNode: this.node }) ?? true;
     }
 
+    /** 独立预览节点，不改写目标的正式图片或动画状态。 */
+    private showPreview(context: UIDropContext): void {
+        const frame = context.source.previewSpriteFrame;
+        if (!frame || !isValid(frame, true)) {
+            this.clearPreview();
+            return;
+        }
+        if (!this.previewNode) {
+            this.previewNode = new Node('DropPreview');
+            this.previewNode.layer = this.node.layer;
+            this.previewNode.addComponent(UITransform);
+            const sprite = this.previewNode.addComponent(Sprite);
+            sprite.sizeMode = Sprite.SizeMode.TRIMMED;
+            sprite.color = new Color(255, 255, 255, 128);
+            this.previewNode.setParent(this.node);
+        }
+        this.previewNode.getComponent(Sprite)!.spriteFrame = frame;
+        const area = this.hitArea ?? this.node;
+        const position = this.node.getComponent(UITransform)!.convertToNodeSpaceAR(area.worldPosition);
+        this.previewNode.setPosition(position);
+    }
+
+    public clearPreview(): void {
+        const node = this.previewNode;
+        this.previewNode = null;
+        if (node && isValid(node, true)) {
+            node.active = false;
+            node.destroy();
+        }
+    }
+
     /** 以下通知入口由 UIDragSource 调用。 */
     public enter(context: UIDropContext): void {
         this.hoverContext = context;
+        this.showPreview(context);
         this.node.emit(UIDropTarget.EventType.ENTER, context);
     }
 
     public over(context: UIDropContext): void {
         if (this.hoverContext?.source !== context.source) return;
         this.hoverContext = context;
+        this.showPreview(context);
         this.node.emit(UIDropTarget.EventType.OVER, context);
     }
 
     public leave(context: UIDropContext): void {
         if (this.hoverContext?.source !== context.source) return;
         this.hoverContext = null;
+        this.clearPreview();
         this.node.emit(UIDropTarget.EventType.LEAVE, context);
     }
 
     public drop(context: UIDropContext): boolean {
         if (!this.canAccept(context)) return false;
+        this.clearPreview();
         this.node.emit(UIDropTarget.EventType.DROP, context);
         EventHandler.emitEvents(this.dropEvents, context);
         return true;

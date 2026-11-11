@@ -60,6 +60,9 @@ export class UIDragSource extends Component {
     @property({ type: SpriteFrame, tooltip: '创建图片副本时使用此图片；留空使用当前节点 Sprite 的 SpriteFrame' })
     public dragSpriteFrame: SpriteFrame | null = null;
 
+    @property({ type: SpriteFrame, tooltip: '悬停在可接收目标时显示的预览图片；留空不显示预览' })
+    public previewSpriteFrame: SpriteFrame | null = null;
+
     @property({ type: Node, tooltip: '仅用于副本：指定带 UITransform 的父节点；留空使用最近的 Canvas' })
     public dragParent: Node | null = null;
 

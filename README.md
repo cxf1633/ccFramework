@@ -120,7 +120,7 @@ Inspector 中显式绑定 `ui/materials/gradient/gradient.mtl`；`PeekCardContro
 
 物品业务、可拖动能力和接收能力分别挂组件，无需让业务类继承拖动基类。
 
-悬停展示由业务容器管理，框架接收组件只提供范围、过滤和事件。业务应在正式写入内容前清理预览，并在离开、隐藏或销毁时恢复原显示状态，避免 DROP 后的 LEAVE 覆盖新内容。
+UIDropTarget 在进入、移动时自动创建独立的半透明预览节点，图片只使用来源 UIDragSource 的 previewSpriteFrame（Inspector 中的 Preview Sprite Frame），未设置时不显示预览，透明度固定为128。预览位于 Hit Area 中心，离开、放下、禁用或销毁时清理，不修改目标的正式图片和动画。业务通过 accepts 校验接收条件。
 
 1. 来源挂 `UIDragSource`，要求自身有 `UITransform`。`Create Instance` 默认关闭，拖动自身并保持抓取偏移；开启后优先使用 `Drag Prefab` 生成副本，否则使用 `Drag Sprite Frame` 生成图片副本。图片留空时读取当前节点 `Sprite.spriteFrame`，缺少可用资源时取消拖动。生成副本时来源保持原位，预制体副本根节点需要 `UITransform`。图片副本自动使用来源 Layer 和图片自然尺寸。
 2. 副本的 `Drag Parent` 建议使用 Canvas 下无 Layout / Mask 的顶层空节点，留空使用最近的 Canvas。自身拖动保留原父节点，避免 Layout / Widget 自动改写位置。组件适用于常规 2D Canvas UI。
