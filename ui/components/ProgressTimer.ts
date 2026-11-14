@@ -59,6 +59,10 @@ export class ProgressTimer extends Component {
 
     /** 圆点在预制体里摆放位置到圆心的距离（第一次同步前量一次），<=0 表示还没量到 */
     private _ballAuthoredRadius = 0;
+    /** 量半径时圆环的尺寸（短边）：圆环尺寸变了就重量，避免节点被放大 / 换父节点后还用旧值 */
+    private _ballMeasuredRingSize = 0;
+    /** 半径诊断日志只打一次（排查"圆点跑到圆心"用） */
+    private _ballRadiusLogged = false;
 
 
     private startColor = new Color().fromHEX("#20c9be");
@@ -244,8 +248,13 @@ export class ProgressTimer extends Component {
     }
 
     /**
-     * 圆点绕行半径：Inspector 上填了就用填的；没填就量一次「圆点在预制体里摆放的位置到圆心的距离」，
-     * 也就是美术把圆点摆在哪条半径上、代码就绕哪条半径转，不需要手填数字。
+     * 圆点绕行半径：Inspector 上填了就用填的；没填就量「圆点在预制体里摆放的位置到圆心的距离」，
+     * 也就是美术把圆点摆在哪条半径上、代码就绕哪一圈，不需要手填数字。
+     *
+     * 2026-11-05 修：按钮区的 `ActionNodeCd` 会被**运行时换父节点**（挂到看牌 / 弃牌按钮下），
+     * 换父节点 / 节点被缩放 / 圆环尺寸变化之后再沿用第一次量的值就可能不准（极端情况量成 0 →
+     * 圆点一直停在圆心）。所以：圆环尺寸变了就重量；量不出（<=0.5 或非有限值）就退回**圆环外径**，
+     * 保证圆点始终贴在圈的外径上，而不是缩在正中间。
      */
     private resolveBallRadius(
         ringTransform: UITransform,
@@ -254,24 +263,36 @@ export class ProgressTimer extends Component {
         centerX: number,
         centerY: number,
     ): number {
+        // 圆环外径（半径）= 短边的一半，作为"量不出来"时的兜底
+        const ringOuterRadius = Math.max(0, Math.min(ringTransform.width, ringTransform.height) * 0.5);
         if (this.ballRadius > 0) {
             return this.ballRadius;
         }
 
-        if (this._ballAuthoredRadius <= 0) {
-            // 首次同步时圆点还停在美术摆的位置上，量一次即可（父节点本地 → 世界 → 圆环本地）
+        const ringSize = Math.min(ringTransform.width, ringTransform.height);
+        if (!(this._ballAuthoredRadius > 0.5) || this._ballMeasuredRingSize !== ringSize) {
+            // 圆点此刻还停在美术摆的位置上（父节点本地 → 世界 → 圆环本地）
             ballParentTransform.convertToWorldSpaceAR(ballNode.position, _ballWorldPos);
             ringTransform.convertToNodeSpaceAR(_ballWorldPos, _ballRingLocalPos);
 
             const dx = _ballRingLocalPos.x - centerX;
             const dy = _ballRingLocalPos.y - centerY;
-            this._ballAuthoredRadius = Math.sqrt(dx * dx + dy * dy);
+            const measured = Math.sqrt(dx * dx + dy * dy);
+            this._ballAuthoredRadius = Number.isFinite(measured) ? measured : 0;
+            this._ballMeasuredRingSize = ringSize;
         }
 
-        // 圆点本来就摆在圆心（量不出半径）时退回用圆环节点尺寸的一半
-        return this._ballAuthoredRadius > 0
-            ? this._ballAuthoredRadius
-            : Math.min(ringTransform.width, ringTransform.height) * 0.5;
+        const radius = this._ballAuthoredRadius > 0.5 ? this._ballAuthoredRadius : ringOuterRadius;
+
+        if (!this._ballRadiusLogged) {
+            this._ballRadiusLogged = true;
+            console.log(`[ProgressTimer] ${this.node?.name ?? '?'} 圆点绕行半径=${radius}`
+                + `（量得=${this._ballAuthoredRadius} 圆环=${ringTransform.width}x${ringTransform.height}`
+                + ` 圆心=(${centerX},${centerY}) 圆点局部=(${ballNode.position.x},${ballNode.position.y})`
+                + ` 父节点=${ballNode.parent?.name ?? '无'}）`);
+        }
+
+        return radius;
     }
 
     /**

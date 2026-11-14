@@ -27,6 +27,15 @@ export class UIToggleGroup extends Component {
     @property([UIToggle])
     public toggles: UIToggle[] = [];
 
+    /**
+     * 默认选中的 Toggle。
+     *
+     * 留空时选第一个；配了就必须是 `toggles` 里的某一个（不在里面按「没配」处理）。
+     * 不会先选第一个标签、再被代码切走时闪一下。
+     */
+    @property({ type: UIToggle, tooltip: "默认选中的 Toggle，留空则选第一个" })
+    public defaultToggle: UIToggle | null = null;
+
     @property({ type: [Node], tooltip: "Panel 节点列表，按下标与 Toggle 一一对应（一对一映射）" })
     public panels: Node[] = [];
 
@@ -40,10 +49,21 @@ export class UIToggleGroup extends Component {
 
     protected onLoad(): void {
         this.toggles.forEach((toggle) => toggle?.setGroup(this));
-        const defaultToggle = this.toggles.find((toggle) => !!toggle);
+
+        const defaultToggle = this.getDefaultToggle();
         if (defaultToggle) {
             this.select(defaultToggle);
         }
+    }
+
+    /** 取默认选中的 Toggle：配了且配得对就用它，否则退回第一个。 */
+    private getDefaultToggle(): UIToggle | null {
+        const configured = this.defaultToggle;
+        if (configured && this.toggles.indexOf(configured) >= 0) {
+            return configured;
+        }
+
+        return this.toggles.find((toggle) => !!toggle) ?? null;
     }
 
     protected onDestroy(): void {

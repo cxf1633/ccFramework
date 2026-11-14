@@ -6,6 +6,7 @@ import { LanguageManager } from "./i18n/Language";
 import { ResManager } from "./res/ResManager";
 import { SceneManager } from "./scene/SceneManager";
 import { StorageManager } from "./storage/StorageManager";
+import { RedPointManager } from "./systems/redpoint/RedPointManager";
 import { UIManager } from "./ui/UIManager";
 import { AesUtils } from "./utils/AesUtils";
 import { NoMoreTipUtils } from "./utils/NoMoreTipUtils";
@@ -26,5 +27,6 @@ export class Framework {
     public static readonly StorageMgr = StorageManager;
     public static readonly AesUtils = AesUtils;
     public static readonly NoMoreTipUtils = NoMoreTipUtils;
+    public static readonly RedPointMgr = RedPointManager.getInstance();
     public static readonly ZlibUtils = ZlibUtils;
 }

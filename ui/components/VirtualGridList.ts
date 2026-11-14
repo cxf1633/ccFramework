@@ -1,11 +1,51 @@
 import { _decorator, Component, Node, ScrollView, UITransform, instantiate, Prefab, Vec2, warn } from 'cc';
 const { ccclass, property } = _decorator;
 
+/**
+ * 分组列表里的一行。
+ *
+ * 普通列表（`init`）的每一行都是统一高度、统一预制体；
+ * 分组列表（`initEntries`）允许每行单独指定预制体（或节点模板）和高度，用来插「分组标题」这类非数据行
+ * （典型场景：电话簿里 A/B/C 分组的标题行，或者俱乐部按角色分块时的块标题）。
+ * 分组列表只支持纵向、单列。
+ */
+export interface VirtualGridEntry {
+    /** 这一行使用的预制体；不传用组件上配置的 cellPrefab。 */
+    prefab?: Prefab;
+    /**
+     * 这一行使用的节点模板（`instantiate(node)` 克隆）。
+     *
+     * 适合标题行直接复用界面里现成的一个 Label 节点，不必单独做标题预制体；
+     * 优先级高于 `prefab`。模板节点可以放在界面里并保持隐藏。
+     * 不传时，`kind === 'header'` 的行会用组件上配置的 `headerTemplate`。
+     */
+    template?: Node;
+    /** 这一行的高度；不传时 header 行用 headerHeight，其余用 cellHeight。 */
+    height?: number;
+    /** 业务自定义标记，回调时原样带回（例如 'header' / 'cell'）。 */
+    kind?: string;
+    /** 业务数据，回调时原样带回。 */
+    data?: any;
+}
+
 @ccclass('VirtualGridList')
 export class VirtualGridList extends Component {
 
     @property(Prefab)
     cellPrefab: Prefab = null!;
+
+    /**
+     * 分组标题行模板。
+     *
+     * 设置了它以后，`initEntries` 里 `kind === 'header'` 且没有单独传 `template` 的行
+     * 会克隆这个节点当标题行——其他列表想“带标题”时，只要给组件配上模板即可。
+     */
+    @property({ type: Node, tooltip: '分组标题行模板；kind === "header" 且未单独传 template 时使用' })
+    public headerTemplate: Node | null = null;
+
+    /** 分组标题行默认高度（entry.height 没传时使用） */
+    @property({ tooltip: '分组标题行默认高度（entry.height 没传时使用）' })
+    public headerHeight: number = 56;
 
     @property({ tooltip: "下拉/右拉触发刷新的临界距离" })
     public pullRefreshThreshold: number = 80;
@@ -74,6 +114,41 @@ export class VirtualGridList extends Component {
     /** 最近一次 scrollToIndex 请求的索引（<0 表示没请求过）：首次 init 后就不再自动回到最前，免得把跳转覆盖掉 */
     private _requestedScrollIndex: number = -1;
 
+    /* ---------------------------- 分组列表 ---------------------------- */
+
+    /** 当前是否分组列表模式（initEntries） */
+    private _grouped: boolean = false;
+
+    /** 分组列表的行数据 */
+    private _entries: VirtualGridEntry[] = [];
+
+    /** 每行顶部相对 content 顶部的偏移（前缀和，单位像素） */
+    private _entryOffsets: number[] = [];
+
+    /** 每行的高度 */
+    private _entryHeights: number[] = [];
+
+    /** 所有行加起来的总高度 */
+    private _entryTotalHeight: number = 0;
+
+    /** 分组列表的逐行回调 */
+    private _onUpdateEntry: ((node: Node, entry: VirtualGridEntry, rowIndex: number) => void) | null = null;
+
+    /** 分组列表当前在用的节点：rowIndex -> node */
+    private _entryInUse: Map<number, Node> = new Map();
+
+    /** 分组列表的对象池：按预制体 / 节点模板分开，标题行和 cell 不能混用 */
+    private _entryPools: Map<Prefab | Node, Node[]> = new Map();
+
+    private _entryStartIndex: number = -1;
+    private _entryEndIndex: number = -1;
+
+    /** 分组列表因为节点未激活而跳过的刷新 */
+    private _pendingGroupRefresh: boolean = false;
+
+    /** 标题行没有可用模板时只提示一次 */
+    private _warnedHeaderTemplateMissing: boolean = false;
+
     // ─────────────────────────────────────────────────────────────────────────
 
     /**
@@ -114,6 +189,17 @@ export class VirtualGridList extends Component {
      * `onLoad` 之后 `_scrollView` 才可用，所以这里放在 onLoad / onEnable 里调用。
      */
     private flushPendingRefresh(): void {
+        if (this._grouped) {
+            if (!this._pendingGroupRefresh || !this.isScrollViewReady()) {
+                return;
+            }
+
+            this._pendingGroupRefresh = false;
+            this._forceUpdate = true;
+            this.updateGroupedLayout();
+            return;
+        }
+
         if (!this._pendingRefresh || !this.isScrollViewReady()) {
             return;
         }
@@ -173,6 +259,9 @@ export class VirtualGridList extends Component {
      */
     public init(count: number, onUpdateItem: (item: Node, index: number) => void) {
 
+        // 同一个列表实例在「普通 / 分组」模式之间切换时，先把另一套在用的节点回收掉
+        this.exitGroupedMode();
+
         //隐藏节点会导致未onload就执行，故延迟一帧
         this.scheduleOnce(() => {
             this._dataCount = count;
@@ -193,6 +282,13 @@ export class VirtualGridList extends Component {
 
             // deferred forced refresh after layout
             this.scheduleOnce(() => {
+                // 外层 updateLayout 已经刷新过可见 cell（_startIndex 已写入）时不再强制刷新，
+                // 否则同一批 cell 会被重复回调 onUpdateItem，业务侧的 setData 会执行两次
+                if (this._startIndex >= 0 && this.isScrollViewReady()) {
+                    this.applyPendingScrollToIndex();
+                    return;
+                }
+
                 this._forceUpdate = true;
                 // 节点未激活时 ScrollView 还没 onLoad，先记下来，等激活后由 flushPendingRefresh 补做
                 if (!this.isScrollViewReady()) {
@@ -216,6 +312,62 @@ export class VirtualGridList extends Component {
             }
         }, 0)
 
+    }
+
+    /**
+     * 初始化 / 重新初始化「分组列表」。
+     *
+     * 和 `init` 的区别：每一行可以单独指定预制体和高度，用来插分组标题
+     * （电话簿 A/B/C 标题、俱乐部按角色分块等）。分组列表只支持纵向单列，
+     * 列宽仍用 `cellWidth`，标题行高度由 `VirtualGridEntry.height` 指定。
+     *
+     * @param entries 行数据（数组顺序就是展示顺序）
+     * @param onUpdateEntry 逐行回调：节点、行数据、行下标
+     */
+    public initEntries(
+        entries: readonly VirtualGridEntry[],
+        onUpdateEntry: (node: Node, entry: VirtualGridEntry, rowIndex: number) => void,
+    ): void {
+        // 从普通模式切过来时，把普通 cell 也回收掉
+        this._recycleAllCells();
+        this.recycleAllEntryCells();
+
+        this._grouped = true;
+        this._entries = [];
+        this._entryOffsets = [];
+        this._entryHeights = [];
+        this._entryTotalHeight = 0;
+        this._onUpdateEntry = onUpdateEntry;
+        this._entryStartIndex = -1;
+        this._entryEndIndex = -1;
+        this._pendingGroupRefresh = false;
+        this._forceUpdate = true;
+        this._lastOffset = -9999;
+        this._isAtTop = false;
+        this._isAtBottom = false;
+
+        // 和 init 一样延迟一帧：节点未激活时 ScrollView 还没 onLoad
+        this.scheduleOnce(() => {
+            this._entries = entries.slice();
+            this.recycleAllEntryCells();
+            this._entryStartIndex = -1;
+            this._entryEndIndex = -1;
+            this._lastOffset = -9999;
+            this._forceUpdate = true;
+            this._isAtTop = false;
+            this._isAtBottom = false;
+            this._scrollView?.stopAutoScroll();
+            this.updateGroupedLayout();
+
+            this.scheduleOnce(() => {
+                this._forceUpdate = true;
+                if (!this.isScrollViewReady()) {
+                    this._pendingGroupRefresh = true;
+                    return;
+                }
+                this.refreshEntries();
+            });
+        }, 0);
     }
 
     public scrollToTop() {
@@ -247,6 +399,12 @@ export class VirtualGridList extends Component {
         const target = Math.floor(Number(index));
         if (!Number.isFinite(target) || target < 0) {
             this._pendingScrollIndex = -1;
+            return;
+        }
+
+        // 分组列表按行偏移直接算，不走普通列表那套「第几行 * 固定行高」
+        if (this._grouped) {
+            this.scrollToEntry(target);
             return;
         }
 
@@ -310,6 +468,11 @@ export class VirtualGridList extends Component {
         if (!this._contentUITrans) return;
         if (!this.isScrollViewReady()) return;
 
+        if (this._grouped) {
+            this.updateGroupedLayout();
+            return;
+        }
+
         // refresh viewSize: Widget may have changed viewport since onLoad
         const viewTrans = this._scrollView.view!.getComponent(UITransform)!;
         this._viewSize.set(viewTrans.width, viewTrans.height);
@@ -356,6 +519,14 @@ export class VirtualGridList extends Component {
      * 仅当该 cell 当前可见时有效
      */
     public refreshItem(index: number) {
+        if (this._grouped) {
+            const node = this._entryInUse.get(index);
+            if (node && this._onUpdateEntry) {
+                this._onUpdateEntry(node, this._entries[index], index);
+            }
+            return;
+        }
+
         const node = this._cellsInUse.get(index);
         if (node && this._onUpdateItem) {
             this._onUpdateItem(node, index);
@@ -366,6 +537,14 @@ export class VirtualGridList extends Component {
      * 刷新所有当前可见的 cell 数据
      */
     public refreshAllVisible() {
+        if (this._grouped) {
+            if (!this._onUpdateEntry) return;
+            this._entryInUse.forEach((node, index) => {
+                this._onUpdateEntry!(node, this._entries[index], index);
+            });
+            return;
+        }
+
         if (!this._onUpdateItem) return;
         this._cellsInUse.forEach((node, index) => {
             this._onUpdateItem!(node, index);
@@ -378,6 +557,10 @@ export class VirtualGridList extends Component {
 
     private onScrolling() {
         this.checkBoundary();
+        if (this._grouped) {
+            this.refreshEntries();
+            return;
+        }
         this.refresh();
     }
 
@@ -556,6 +739,232 @@ export class VirtualGridList extends Component {
         if (Math.abs(cur.x - posX) > 0.1 || Math.abs(cur.y - posY) > 0.1) {
             node.setPosition(posX, posY, 0);
         }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    //  分组列表（initEntries）：支持每行不同高度 / 预制体，用来插分组标题
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /** 退出分组模式：回收在用的分组节点，清空分组数据（普通 init 会调用） */
+    private exitGroupedMode(): void {
+        if (!this._grouped) {
+            return;
+        }
+
+        this.recycleAllEntryCells();
+        this._grouped = false;
+        this._entries = [];
+        this._entryOffsets = [];
+        this._entryHeights = [];
+        this._entryTotalHeight = 0;
+        this._onUpdateEntry = null;
+        this._pendingGroupRefresh = false;
+        this._entryStartIndex = -1;
+        this._entryEndIndex = -1;
+    }
+
+    /** 重新计算分组布局（行偏移、content 尺寸）并刷新一次 */
+    private updateGroupedLayout(): void {
+        if (!this.isScrollViewReady()) {
+            return;
+        }
+
+        if (!this._scrollView.vertical) {
+            warn('[VirtualGridList] initEntries 只支持纵向列表，当前 ScrollView 是横向的');
+            return;
+        }
+
+        const viewTrans = this._scrollView.view!.getComponent(UITransform)!;
+        this._viewSize.set(viewTrans.width, viewTrans.height);
+        this._columnCount = 1;
+
+        this._entryOffsets.length = 0;
+        this._entryHeights.length = 0;
+        let total = 0;
+        for (const entry of this._entries) {
+            const height = this.getEntryHeight(entry);
+            this._entryOffsets.push(total);
+            this._entryHeights.push(height);
+            total += height;
+        }
+        this._entryTotalHeight = total;
+
+        this._topPadding = (this.forceCenter && total < this._viewSize.y)
+            ? (this._viewSize.y - total) / 2 : 0;
+        this._sidePadding = (this._viewSize.x - this._cellWidth) / 2;
+
+        this._contentUITrans.width = Math.max(this._cellWidth, this._viewSize.x);
+        this._contentUITrans.height = Math.max(total + this._topPadding * 2, this._viewSize.y);
+
+        this.refreshEntries();
+    }
+
+    /** 分组列表刷新：按滚动偏移找出可见行，回收 / 创建 / 更新节点 */
+    private refreshEntries(): void {
+        if (!this._grouped || !this._onUpdateEntry || !this.isScrollViewReady()) {
+            return;
+        }
+
+        const offset = this._scrollView.getScrollOffset();
+        const currentOffset = offset.y;
+        if (!this._forceUpdate && Math.abs(currentOffset - this._lastOffset) < 0.1) {
+            return;
+        }
+        this._lastOffset = currentOffset;
+
+        if (this._entries.length === 0) {
+            this.recycleAllEntryCells();
+            this._entryStartIndex = -1;
+            this._entryEndIndex = -1;
+            this._forceUpdate = false;
+            return;
+        }
+
+        const relativeY = Math.max(0, currentOffset - this._topPadding);
+        const startIndex = Math.max(0, this.findEntryIndexAt(relativeY));
+        const endIndex = Math.min(
+            this._entries.length - 1,
+            this.findEntryIndexAt(relativeY + this._viewSize.y) + 1,
+        );
+
+        const wasForced = this._forceUpdate;
+        this._forceUpdate = false;
+        this._entryStartIndex = startIndex;
+        this._entryEndIndex = endIndex;
+
+        // 回收离开可视区的节点
+        this._entryInUse.forEach((node, index) => {
+            if (index < startIndex || index > endIndex || index >= this._entries.length) {
+                this.recycleEntry(index, node);
+            }
+        });
+
+        // 创建 / 复用可见行
+        for (let i = startIndex; i <= endIndex; i++) {
+            if (i < 0 || i >= this._entries.length) continue;
+
+            let node = this._entryInUse.get(i);
+            if (!node) {
+                node = this.getOrCreateEntryCell(this._entries[i]);
+                this._entryInUse.set(i, node);
+                this.updateEntryPosition(node, i);
+                this._onUpdateEntry(node, this._entries[i], i);
+                continue;
+            }
+
+            this.updateEntryPosition(node, i);
+            if (wasForced) {
+                this._onUpdateEntry(node, this._entries[i], i);
+            }
+        }
+    }
+
+    /** 二分查找 y 所在的行下标（最大的且 top <= y） */
+    private findEntryIndexAt(y: number): number {
+        const offsets = this._entryOffsets;
+        if (offsets.length === 0) {
+            return 0;
+        }
+        if (y <= 0) {
+            return 0;
+        }
+        if (y >= this._entryTotalHeight) {
+            return offsets.length - 1;
+        }
+
+        let low = 0;
+        let high = offsets.length - 1;
+        while (low <= high) {
+            const mid = (low + high) >> 1;
+            if (offsets[mid] <= y) {
+                low = mid + 1;
+            } else {
+                high = mid - 1;
+            }
+        }
+        return Math.max(0, high);
+    }
+
+    private updateEntryPosition(node: Node, index: number): void {
+        const height = this._entryHeights[index] ?? this._cellHeight;
+        const trans = node.getComponent(UITransform);
+        // 按节点自身锚点摆位：标题模板常是左锚点，要贴着列表左边，而不是按中心点居中
+        const anchorX = trans?.anchorX ?? 0.5;
+        const anchorY = trans?.anchorY ?? 0.5;
+        const posX = this._sidePadding + this._cellWidth * anchorX;
+        const posY = -(this._topPadding + this._entryOffsets[index] + height * (1 - anchorY));
+
+        const cur = node.position;
+        if (Math.abs(cur.x - posX) > 0.1 || Math.abs(cur.y - posY) > 0.1) {
+            node.setPosition(posX, posY, 0);
+        }
+    }
+
+    private getOrCreateEntryCell(entry: VirtualGridEntry): Node {
+        const source = this.getEntrySource(entry);
+        const pool = this._entryPools.get(source);
+        let node = pool?.pop();
+        if (!node) {
+            node = source instanceof Node ? instantiate(source) : instantiate(source);
+            this._content.addChild(node);
+        }
+
+        node.active = true;
+        return node;
+    }
+
+    private recycleEntry(index: number, node: Node): void {
+        node.active = false;
+
+        const entry = this._entries[index];
+        const source = entry ? this.getEntrySource(entry) : this.cellPrefab;
+        const pool = this._entryPools.get(source) ?? [];
+        pool.push(node);
+        this._entryPools.set(source, pool);
+
+        this._entryInUse.delete(index);
+    }
+
+    /** 这一行的高度：优先 entry.height，其次标题行 headerHeight / 普通行 cellHeight */
+    private getEntryHeight(entry: VirtualGridEntry): number {
+        const fallback = entry.kind === 'header' ? this.headerHeight : this._cellHeight;
+        return Math.max(1, Number(entry.height) || fallback);
+    }
+
+    /** 这一行的节点来源：prefab > 行 template > header 的组件模板 > cellPrefab */
+    private getEntrySource(entry: VirtualGridEntry): Prefab | Node {
+        const template = entry.template ?? (entry.kind === 'header' ? this.headerTemplate : null);
+        if (!entry.prefab && !template && entry.kind === 'header' && !this._warnedHeaderTemplateMissing) {
+            this._warnedHeaderTemplateMissing = true;
+            warn('[VirtualGridList] 标题行没有模板：请给组件配置 headerTemplate，或在 entry.template 里传节点');
+        }
+        return entry.prefab ?? template ?? this.cellPrefab;
+    }
+
+    private recycleAllEntryCells(): void {
+        const entries = Array.from(this._entryInUse.entries());
+        for (const [index, node] of entries) {
+            this.recycleEntry(index, node);
+        }
+        this._entryInUse.clear();
+    }
+
+    /** 分组列表的居中跳转（行高不固定，按该行的偏移算） */
+    private scrollToEntry(index: number): void {
+        if (!this.isScrollViewReady() || index >= this._entries.length) {
+            return;
+        }
+
+        const maxOffset = this._scrollView.getMaxScrollOffset();
+        if (maxOffset.y <= 0) {
+            return;
+        }
+
+        const height = this._entryHeights[index] ?? this._cellHeight;
+        const center = this._topPadding + this._entryOffsets[index] + height / 2;
+        const offset = Math.min(maxOffset.y, Math.max(0, center - this._viewSize.y / 2));
+        this._scrollView.scrollToPercentVertical(offset / maxOffset.y, 0, false);
+        this.refreshEntries();
     }
 
     // ─────────────────────────────────────────────────────────────────────────
