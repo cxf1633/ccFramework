@@ -1,4 +1,4 @@
-import { _decorator, Component, easing, Label, Tween, tween } from 'cc';
+import { _decorator, AudioClip, Component, easing, Label, Tween, tween } from 'cc';
 import { EasingNames, EasingType } from '../tweenAnim/BaseAnim';
 
 const { ccclass, property } = _decorator;
@@ -28,8 +28,13 @@ interface NumberTweenTarget {
  */
 @ccclass('NumberRoller')
 export class NumberRoller extends Component {
+    private static soundPlayer: ((clip: AudioClip) => void) | null = null;
+
     @property({ type: Label, tooltip: '显示数值的 Label；留空时使用当前节点上的 Label' })
     private label: Label = null;
+
+    @property({ type: AudioClip, tooltip: '数字开始滚动时播放一次的音效；留空不播放' })
+    public rollAudio: AudioClip | null = null;
 
     @property({ tooltip: '初始数值' })
     private initialValue: number = 0;
@@ -51,6 +56,11 @@ export class NumberRoller extends Component {
     private lastText: string | null = null;
     private playVersion: number = 0;
     private initialized: boolean = false;
+
+    /** 由 AudioService 注入播放器，统一使用项目音效音量和静音设置。 */
+    public static setSoundPlayer(player: ((clip: AudioClip) => void) | null): void {
+        NumberRoller.soundPlayer = player;
+    }
 
     protected onLoad(): void {
         this.initialize();
@@ -142,6 +152,9 @@ export class NumberRoller extends Component {
                 options.onComplete?.();
             })
             .start();
+        if (this.rollAudio) {
+            NumberRoller.soundPlayer?.(this.rollAudio);
+        }
     }
 
     /** 立即设置数值，不播放动画。 */

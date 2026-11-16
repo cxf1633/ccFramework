@@ -3,6 +3,7 @@ import { Logger } from "../log/Logger";
 import { ResManager } from "../res/ResManager";
 import { UIButton } from "../ui/components/UIButton";
 import { UIClickSound } from "../ui/components/UIClickSound";
+import { NumberRoller } from "../ui/components/NumberRoller";
 import { AudioManager } from "./AudioManager";
 
 export type AudioType = "music" | "sound";
@@ -61,6 +62,7 @@ export class AudioService {
         this.audioManager.createChannel(SOUND_CHANNEL);
         UIButton.setClickSoundPlayer((clip) => this.playButtonSound(clip));
         UIClickSound.setClickSoundPlayer((clip) => this.playButtonSound(clip));
+        NumberRoller.setSoundPlayer((clip) => this.playSoundClip(clip));
 
         const preloadResources = options.preloadResources || [];
         void this.preloadResourceAudios(preloadResources).catch((error) => {
@@ -74,6 +76,7 @@ export class AudioService {
         this.currentMusicKey = "";
         UIButton.setClickSoundPlayer(null);
         UIClickSound.setClickSoundPlayer(null);
+        NumberRoller.setSoundPlayer(null);
         this.audioManager.dispose();
         this.resourceAudioClips.clear();
         this.resourceAudioLoading.clear();
@@ -98,15 +101,19 @@ export class AudioService {
         this.playSoundClip(clip, volume);
     }
 
-    /** 播放指定 Bundle 内的音效。 */
+    /** 播放指定 Bundle 内的音效；加载或播放失败时统一记录日志，不向业务层抛出。 */
     public async playSound(
         bundleName: string,
         path: string,
         volume: number = 1,
         options: AudioSoundPlayOptions = {},
     ): Promise<void> {
-        const clip = await this.loadBundleAudio(bundleName, path);
-        this.playSoundClip(clip, volume, path, options);
+        try {
+            const clip = await this.loadBundleAudio(bundleName, path);
+            this.playSoundClip(clip, volume, path, options);
+        } catch (error) {
+            Logger.error(`[AudioService] 音效播放失败: ${bundleName}/${path}`, error);
+        }
     }
 
     /** 播放指定 Bundle 内的背景音乐。 */
